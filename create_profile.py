@@ -14,7 +14,7 @@ except Exception as e:
     print("日本語フォントが見つからない場合、文字化けが発生する可能性があります。")
 
 # --- 1. データ処理 ---
-gpx_file_path = '20250624_2025_夏山合宿_Day3.gpx'
+gpx_file_path = '六甲全山縦走ルート高度付き.gpx'
 try:
     with open(gpx_file_path, 'r', encoding='utf-8') as gpx_file:
         gpx = gpxpy.parse(gpx_file)
@@ -99,7 +99,7 @@ ax_slider_elev = fig_elev.add_axes([0.3, 0.05, 0.4, 0.03])
 ax_table = fig_elev.add_axes([0.08, 0.12, 0.87, 0.28])
 ax_table.axis('off')
 
-ax_elev.scatter(distances_km, elevations, s=5, label='Elevation', color='blue')
+ax_elev.scatter(distances_km, elevations, s=3, label='Elevation', color='blue')
 ax_elev.set_ylabel('垂直距離 [m]')
 # X軸ラベルは表の中に含めるため削除、または一番上の行とする
 # ax_elev.set_xlabel('距離 (km)') 
