@@ -1,0 +1,12 @@
+{
+  "name": "geosection",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --check app.js && node tests/run-tests.mjs",
+    "lint": "node scripts/lint.mjs",
+    "typecheck": "node --check app.js && node --check scripts/build.mjs && node --check scripts/lint.mjs && node --check scripts/serve-dist.mjs && node --check tests/run-tests.mjs"
+  }
+}

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="GPX から地図、断面図、傾斜図、標高補完済み GPX を生成する静的ツール" />
+    <title>GeoSection</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">GPX route analyzer</p>
+        <h1>GeoSection</h1>
+      </div>
+      <a class="source-link" href="https://github.com/ry32767/GeoSection" target="_blank" rel="noopener noreferrer">GitHub</a>
+    </header>
+
+    <main class="app-shell">
+      <section class="control-panel" aria-label="GPX 入力">
+        <div class="file-control">
+          <label for="gpx-file">GPX ファイル</label>
+          <input id="gpx-file" type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" />
+        </div>
+
+        <div class="settings-grid">
+          <label>
+            標高 API
+            <input id="elevation-endpoint" type="url" value="https://api.open-elevation.com/api/v1/lookup" />
+          </label>
+          <label>
+            補完バッチ数
+            <input id="batch-size" type="number" min="1" max="100" value="80" />
+          </label>
+          <label>
+            傾斜平滑化
+            <input id="smoothing-window" type="range" min="1" max="25" value="9" />
+          </label>
+          <output id="smoothing-output" for="smoothing-window">9 点</output>
+        </div>
+
+        <div class="actions">
+          <button id="download-gpx" type="button" disabled>補完済み GPX を保存</button>
+          <button id="fit-map" type="button" disabled>全体表示</button>
+        </div>
+
+        <div id="status" class="status" role="status" aria-live="polite">GPX ファイルを選択してください。</div>
+      </section>
+
+      <section class="summary-band" aria-label="ルート概要">
+        <div>
+          <span>距離</span>
+          <strong id="metric-distance">-</strong>
+        </div>
+        <div>
+          <span>累積上昇</span>
+          <strong id="metric-ascent">-</strong>
+        </div>
+        <div>
+          <span>累積下降</span>
+          <strong id="metric-descent">-</strong>
+        </div>
+        <div>
+          <span>標高範囲</span>
+          <strong id="metric-elevation">-</strong>
+        </div>
+      </section>
+
+      <section class="workspace-grid">
+        <div class="map-panel" aria-label="地図">
+          <div id="map"></div>
+        </div>
+
+        <div class="chart-stack">
+          <div class="chart-panel">
+            <div class="panel-title">
+              <h2>断面図</h2>
+              <span id="elevation-note">標高データ待機中</span>
+            </div>
+            <canvas id="elevation-chart" aria-label="断面図"></canvas>
+          </div>
+
+          <div class="chart-panel">
+            <div class="panel-title">
+              <h2>傾斜図</h2>
+              <span id="slope-note">傾斜データ待機中</span>
+            </div>
+            <canvas id="slope-chart" aria-label="傾斜図"></canvas>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
