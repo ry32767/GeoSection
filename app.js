@@ -179,6 +179,8 @@ export function writeElevationsToGpx(doc, points) {
 
 function boot() {
   const fileInput = document.querySelector("#gpx-file");
+  const routeButtons = document.querySelector("#route-buttons");
+  const routeLibraryNote = document.querySelector("#route-library-note");
   const statusEl = document.querySelector("#status");
   const endpointInput = document.querySelector("#elevation-endpoint");
   const batchSizeInput = document.querySelector("#batch-size");
@@ -209,6 +211,8 @@ function boot() {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(map);
 
+  loadRouteLibrary();
+
   smoothingInput.addEventListener("input", () => {
     smoothingOutput.value = `${smoothingInput.value} 点`;
     if (latestParsed) renderAnalysis(latestParsed.points);
@@ -217,32 +221,12 @@ function boot() {
   fileInput.addEventListener("change", async () => {
     const file = fileInput.files?.[0];
     if (!file) return;
-    latestFileName = file.name.replace(/\.gpx$/i, "") || "route";
+    clearRouteSelection();
     setBusy(true);
 
     try {
-      updateStatus("GPX を読み込んでいます。");
       const xmlText = await file.text();
-      const parsed = parseGpx(xmlText);
-      latestParsed = parsed;
-
-      if (needsElevation(parsed.points)) {
-        updateStatus("標高が無い点を緯度経度から補完しています。");
-        const result = await fillMissingElevations(parsed.points, {
-          endpoint: endpointInput.value,
-          batchSize: Number.parseInt(batchSizeInput.value, 10),
-          onProgress: (done, total) => updateStatus(`標高補完中: ${done} / ${total} 点`),
-        });
-        elevationNote.textContent = `${result.filled} 点の標高を補完`;
-      } else {
-        elevationNote.textContent = "GPX 内の標高を使用";
-      }
-
-      latestGpxText = writeElevationsToGpx(parsed.doc, parsed.points);
-      renderAnalysis(parsed.points);
-      downloadButton.disabled = false;
-      fitMapButton.disabled = false;
-      updateStatus("解析が完了しました。");
+      await analyzeGpxText(xmlText, file.name.replace(/\.gpx$/i, "") || "route");
     } catch (error) {
       console.error(error);
       updateStatus(error.message || "処理中にエラーが発生しました。");
@@ -267,6 +251,72 @@ function boot() {
     if (routeLayer) map.fitBounds(routeLayer.getBounds(), { padding: [28, 28] });
   });
 
+  async function loadRouteLibrary() {
+    try {
+      const response = await fetch("./data/routes.json", { cache: "no-store" });
+      if (!response.ok) throw new Error("登録済み GPX 一覧を読み込めませんでした。");
+      const routes = await response.json();
+      routeButtons.textContent = "";
+      routes.forEach((route) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = route.name;
+        button.dataset.file = route.file;
+        button.setAttribute("aria-pressed", "false");
+        button.addEventListener("click", () => loadRegisteredRoute(route, button));
+        routeButtons.append(button);
+      });
+      routeLibraryNote.textContent = `${routes.length} 件`;
+    } catch (error) {
+      console.error(error);
+      routeLibraryNote.textContent = "読み込み失敗";
+    }
+  }
+
+  async function loadRegisteredRoute(route, button) {
+    setBusy(true);
+    try {
+      updateStatus(`${route.name} を読み込んでいます。`);
+      const response = await fetch(encodeURI(route.file));
+      if (!response.ok) throw new Error(`${route.name} を読み込めませんでした。`);
+      const xmlText = await response.text();
+      clearRouteSelection();
+      button.setAttribute("aria-pressed", "true");
+      fileInput.value = "";
+      await analyzeGpxText(xmlText, route.name);
+    } catch (error) {
+      console.error(error);
+      updateStatus(error.message || "登録済み GPX の読み込みに失敗しました。");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function analyzeGpxText(xmlText, routeName) {
+    latestFileName = routeName;
+    updateStatus("GPX を読み込んでいます。");
+    const parsed = parseGpx(xmlText);
+    latestParsed = parsed;
+
+    if (needsElevation(parsed.points)) {
+      updateStatus("標高が無い点を緯度経度から補完しています。");
+      const result = await fillMissingElevations(parsed.points, {
+        endpoint: endpointInput.value,
+        batchSize: Number.parseInt(batchSizeInput.value, 10),
+        onProgress: (done, total) => updateStatus(`標高補完中: ${done} / ${total} 点`),
+      });
+      elevationNote.textContent = `${result.filled} 点の標高を補完`;
+    } else {
+      elevationNote.textContent = "GPX 内の標高を使用";
+    }
+
+    latestGpxText = writeElevationsToGpx(parsed.doc, parsed.points);
+    renderAnalysis(parsed.points);
+    downloadButton.disabled = false;
+    fitMapButton.disabled = false;
+    updateStatus("解析が完了しました。");
+  }
+
   function renderAnalysis(points) {
     const stats = computeRouteStats(points, Number.parseInt(smoothingInput.value, 10));
     const latLngs = points.map((point) => [point.lat, point.lon]);
@@ -280,14 +330,15 @@ function boot() {
 
   function renderMap(latLngs) {
     if (routeLayer) routeLayer.remove();
-    routeLayer = L.polyline(latLngs, {
+    const line = L.polyline(latLngs, {
       color: "#1f7a5c",
       weight: 5,
       opacity: 0.9,
       lineJoin: "round",
-    }).addTo(map);
-    L.circleMarker(latLngs[0], { radius: 5, color: "#0f5c43", fillOpacity: 1 }).addTo(routeLayer);
-    L.circleMarker(latLngs[latLngs.length - 1], { radius: 5, color: "#d56b1f", fillOpacity: 1 }).addTo(routeLayer);
+    });
+    const start = L.circleMarker(latLngs[0], { radius: 5, color: "#0f5c43", fillOpacity: 1 });
+    const finish = L.circleMarker(latLngs[latLngs.length - 1], { radius: 5, color: "#d56b1f", fillOpacity: 1 });
+    routeLayer = L.featureGroup([line, start, finish]).addTo(map);
     map.fitBounds(routeLayer.getBounds(), { padding: [28, 28] });
   }
 
@@ -392,6 +443,15 @@ function boot() {
     fileInput.disabled = isBusy;
     endpointInput.disabled = isBusy;
     batchSizeInput.disabled = isBusy;
+    routeButtons.querySelectorAll("button").forEach((button) => {
+      button.disabled = isBusy;
+    });
+  }
+
+  function clearRouteSelection() {
+    routeButtons.querySelectorAll("button").forEach((button) => {
+      button.setAttribute("aria-pressed", "false");
+    });
   }
 }
 
