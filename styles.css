@@ -76,6 +76,7 @@ h2 {
 }
 
 .control-panel,
+.route-library,
 .chart-panel {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -163,6 +164,35 @@ button:disabled {
   min-height: 24px;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.route-library {
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.route-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.route-buttons button {
+  min-height: 36px;
+  max-width: 100%;
+  background: #ffffff;
+  color: var(--accent-strong);
+  border: 1px solid var(--line);
+  overflow-wrap: anywhere;
+  white-space: normal;
+  text-align: left;
+}
+
+.route-buttons button:hover:not(:disabled),
+.route-buttons button[aria-pressed="true"] {
+  background: var(--surface-soft);
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 .summary-band {

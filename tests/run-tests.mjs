@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { access, readFile } from "node:fs/promises";
 import { computeRouteStats, haversineMeters, movingAverage, needsElevation } from "../app.js";
 
 const oneDegreeLonAtEquator = haversineMeters({ lat: 0, lon: 0 }, { lat: 0, lon: 1 });
@@ -19,5 +20,13 @@ assert.equal(stats.maxElevation, 130);
 assert.equal(needsElevation(route), false);
 assert.equal(needsElevation([{ lat: 1, lon: 1, elevation: null }]), true);
 assert.deepEqual(movingAverage([0, 10, 20, 30], 3), [5, 10, 20, 25]);
+
+const routes = JSON.parse(await readFile(new URL("../data/routes.json", import.meta.url), "utf8"));
+assert.equal(routes.length, 15);
+for (const route of routes) {
+  assert.ok(route.name);
+  assert.ok(route.file.startsWith("./data/"));
+  await access(new URL(`..${route.file.slice(1)}`, import.meta.url));
+}
 
 console.log("Core tests passed");
