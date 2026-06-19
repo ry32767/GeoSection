@@ -3,3 +3,7 @@ node_modules/
 .env
 .env.*
 !.env.example
+
+# Agent Skills: redundant multi-agent copies. Claude Code reads .claude/skills/,
+# so only that copy and skills-lock.json are tracked.
+.agents/
