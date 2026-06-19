@@ -271,6 +271,8 @@ function boot() {
   const exportNote = document.querySelector("#export-note");
   const exportElevationCanvas = document.querySelector("#export-elevation-canvas");
   const exportSlopeCanvas = document.querySelector("#export-slope-canvas");
+  const elevationCanvas = document.querySelector("#elevation-chart");
+  const slopeCanvas = document.querySelector("#slope-chart");
   const elevationNote = document.querySelector("#elevation-note");
   const slopeNote = document.querySelector("#slope-note");
   const metrics = {
@@ -284,6 +286,7 @@ function boot() {
   let hoverMarker = null;
   let elevationChart = null;
   let slopeChart = null;
+  let lastHighlightIndex = null;
   let latestGpxText = "";
   let latestFileName = "route.gpx";
   let latestParsed = null;
@@ -291,10 +294,31 @@ function boot() {
   let latestPoints = null;
 
   const map = L.map("map", { scrollWheelZoom: true }).setView([35.6812, 139.7671], 6);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  // 地形図（国土地理院 標準地図）。日本の山岳の等高線・地形が読み取りやすい。
+  L.tileLayer("https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png", {
+    maxZoom: 18,
+    attribution:
+      '地形図: <a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener noreferrer">国土地理院</a>',
   }).addTo(map);
+
+  // 地図をなぞると、最も近いルート点を断面図・傾斜図に印として表示する（地図 → グラフ）。
+  map.on("mousemove", (event) => {
+    if (!latestPoints?.length) return;
+    const index = findNearestPointIndex(event.latlng);
+    if (index == null) return;
+    const point = latestPoints[index];
+    const pixel = map.latLngToContainerPoint([point.lat, point.lon]);
+    if (pixel.distanceTo(event.containerPoint) > 40) {
+      clearHighlight();
+      return;
+    }
+    highlightAtIndex(index);
+  });
+  map.on("mouseout", clearHighlight);
+
+  for (const canvas of [elevationCanvas, slopeCanvas]) {
+    canvas.addEventListener("mouseleave", clearHighlight);
+  }
 
   loadRouteLibrary();
 
@@ -494,10 +518,16 @@ function boot() {
           grid: { color: "rgba(99, 112, 105, 0.16)" },
         },
       },
-      onHover: (_, elements) => {
-        if (!elements.length) return;
+      onHover: (_, elements, chart) => {
+        if (!elements.length) {
+          clearHighlight();
+          return;
+        }
+        // グラフ → 地図マーカー + もう一方のグラフにも印（手前のグラフは Chart.js が処理）。
         const index = elements[0].index;
         showHoverMarker(points[index], color);
+        setChartActiveIndex(chart === elevationChart ? slopeChart : elevationChart, index);
+        lastHighlightIndex = index;
       },
     });
 
@@ -511,6 +541,10 @@ function boot() {
           backgroundColor: colorWithAlpha(colors.elevation, 0.16),
           fill: true,
           pointRadius: 0,
+          pointHoverRadius: 6,
+          pointHoverBorderWidth: 3,
+          pointHoverBackgroundColor: "#ffffff",
+          pointHoverBorderColor: colors.elevation,
           tension: 0.18,
         },
       ],
@@ -525,6 +559,10 @@ function boot() {
           backgroundColor: colorWithAlpha(colors.slope, 0.12),
           fill: true,
           pointRadius: 0,
+          pointHoverRadius: 6,
+          pointHoverBorderWidth: 3,
+          pointHoverBackgroundColor: "#ffffff",
+          pointHoverBorderColor: colors.slope,
           tension: 0.16,
         },
       ],
@@ -532,15 +570,17 @@ function boot() {
 
     if (elevationChart) elevationChart.destroy();
     if (slopeChart) slopeChart.destroy();
-    elevationChart = new Chart(document.querySelector("#elevation-chart"), {
+    elevationChart = new Chart(elevationCanvas, {
       type: "line",
       data: elevationData,
       options: chartOptions("標高 [m]", colors.elevation),
+      plugins: [selectionMarkerPlugin],
     });
-    slopeChart = new Chart(document.querySelector("#slope-chart"), {
+    slopeChart = new Chart(slopeCanvas, {
       type: "line",
       data: slopeData,
       options: chartOptions("傾斜角 [度]", colors.slope),
+      plugins: [selectionMarkerPlugin],
     });
   }
 
@@ -553,6 +593,76 @@ function boot() {
       fillColor: "#ffffff",
       fillOpacity: 1,
     }).addTo(map);
+  }
+
+  // 選択箇所を縦の破線でグラフ上に示す Chart.js プラグイン。
+  const selectionMarkerPlugin = {
+    id: "selectionMarker",
+    afterDatasetsDraw(chart) {
+      const active = chart.getActiveElements();
+      if (!active.length) return;
+      const { ctx, chartArea } = chart;
+      const x = active[0].element.x;
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(x, chartArea.top);
+      ctx.lineTo(x, chartArea.bottom);
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeStyle = "rgba(40, 44, 42, 0.55)";
+      ctx.stroke();
+      ctx.restore();
+    },
+  };
+
+  function findNearestPointIndex(latlng) {
+    let bestIndex = null;
+    let bestDistance = Infinity;
+    const cosLat = Math.cos((latlng.lat * Math.PI) / 180);
+    for (let i = 0; i < latestPoints.length; i += 1) {
+      const dLat = latestPoints[i].lat - latlng.lat;
+      const dLon = (latestPoints[i].lon - latlng.lng) * cosLat;
+      const distance = dLat * dLat + dLon * dLon;
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = i;
+      }
+    }
+    return bestIndex;
+  }
+
+  // 地図 → グラフ。指定インデックスの点を地図マーカーと両グラフの印に反映する。
+  function highlightAtIndex(index) {
+    if (!latestPoints || index == null || index < 0 || index >= latestPoints.length) return;
+    if (index === lastHighlightIndex) return;
+    lastHighlightIndex = index;
+    showHoverMarker(latestPoints[index], getGraphColors().elevation);
+    setChartActiveIndex(elevationChart, index);
+    setChartActiveIndex(slopeChart, index);
+  }
+
+  function setChartActiveIndex(chart, index) {
+    if (!chart) return;
+    const element = chart.getDatasetMeta(0)?.data?.[index];
+    chart.setActiveElements([{ datasetIndex: 0, index }]);
+    if (chart.tooltip && element) {
+      chart.tooltip.setActiveElements([{ datasetIndex: 0, index }], { x: element.x, y: element.y });
+    }
+    chart.update("none");
+  }
+
+  function clearHighlight() {
+    lastHighlightIndex = null;
+    if (hoverMarker) {
+      hoverMarker.remove();
+      hoverMarker = null;
+    }
+    for (const chart of [elevationChart, slopeChart]) {
+      if (!chart) continue;
+      chart.setActiveElements([]);
+      if (chart.tooltip) chart.tooltip.setActiveElements([], { x: 0, y: 0 });
+      chart.update("none");
+    }
   }
 
   function renderExportCanvases() {
