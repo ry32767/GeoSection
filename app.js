@@ -114,12 +114,14 @@ export function needsElevation(points) {
   return points.some((point) => point.elevation === null);
 }
 
-export function getExportCanvasSize(paperKey, width = EXPORT_BASE_WIDTH, exaggeration = 20) {
+export function getExportCanvasSize(paperKey, width = EXPORT_BASE_WIDTH) {
   const paper = PAPER_SIZES[paperKey] ?? PAPER_SIZES["a4-landscape"];
-  const factor = Math.max(0.15, Math.min(8, exaggeration / 20));
+  // The exported page keeps the selected paper's true aspect ratio. The
+  // exaggeration only reshapes the graph drawn inside the page (see the
+  // export layout helpers), it must never change the paper size itself.
   return {
     width,
-    height: Math.max(220, Math.round((width / paper.ratio) * factor)),
+    height: Math.max(220, Math.round(width / paper.ratio)),
     label: paper.label,
   };
 }
@@ -556,7 +558,7 @@ function boot() {
   function renderExportCanvases() {
     if (!latestStats) return;
     const exaggeration = Number.parseInt(exportExaggerationInput.value, 10);
-    const size = getExportCanvasSize(paperSizeInput.value, EXPORT_BASE_WIDTH, exaggeration);
+    const size = getExportCanvasSize(paperSizeInput.value, EXPORT_BASE_WIDTH);
     const options = getExportOptions();
     applyPreviewScale();
     drawElevationExport(exportElevationCanvas, latestStats, size, exaggeration, options);
@@ -569,7 +571,7 @@ function boot() {
     const ctx = canvas.getContext("2d");
     const width = canvas.width;
     const height = canvas.height;
-    const layout = getElevationExportLayout(width, height, options.marginPercent);
+    const layout = getElevationExportLayout(width, height, options.marginPercent, exaggeration);
     const { plot } = layout;
     const margin = { top: plot.top };
     const yAxis = getAutoElevationAxis(stats.minElevation, stats.maxElevation);
@@ -602,7 +604,7 @@ function boot() {
     const ctx = canvas.getContext("2d");
     const width = canvas.width;
     const height = canvas.height;
-    const layout = getSlopeExportLayout(width, height, options.marginPercent);
+    const layout = getSlopeExportLayout(width, height, options.marginPercent, exaggeration);
     const { plot } = layout;
     const yAxis = getAutoSlopeAxis(stats.slopes);
     const xMax = Math.max(1, getNiceCeil(stats.totalKm, getNiceTickStep(stats.totalKm, 12)));
@@ -635,25 +637,39 @@ function boot() {
     document.documentElement.style.setProperty("--paper-preview-scale", `${previewScaleInput.value}%`);
   }
 
-  function getElevationExportLayout(width, height, marginPercent) {
+  function getElevationExportLayout(width, height, marginPercent, exaggeration = 20) {
     const scale = clamp(Math.min(width / EXPORT_BASE_WIDTH, height / 980), 0.45, 1.1);
     const pageMarginX = Math.round(width * (marginPercent / 100));
     const pageMarginY = Math.round(height * (marginPercent / 100));
-    const left = Math.max(pageMarginX + Math.round(78 * scale), Math.round(width * 0.13));
-    const right = width - Math.max(pageMarginX, Math.round(width * 0.045));
+    const fullLeft = Math.max(pageMarginX + Math.round(78 * scale), Math.round(width * 0.13));
+    const fullRight = width - Math.max(pageMarginX, Math.round(width * 0.045));
     const top = Math.max(pageMarginY + Math.round(28 * scale), Math.round(36 * scale));
     const bottomPad = Math.max(pageMarginY, Math.round(16 * scale));
     const minPlotHeight = Math.max(76, Math.round(120 * scale));
-    let tableHeight = clamp(Math.round(height * 0.14), Math.round(44 * scale), Math.round(92 * scale));
+    // The paper size is fixed; the exaggeration only reshapes the graph inside
+    // the page. Up to 20 it stretches the content height (top-anchored, white
+    // margin below). Beyond 20 the height is already maxed out, so it instead
+    // narrows the content width (centered, white margin on the sides) to keep
+    // raising the vertical-to-horizontal ratio.
+    const ratio = exaggeration / 20;
+    const vScale = clamp(Math.min(ratio, 1), 0.2, 1);
+    const hScale = ratio > 1 ? 1 / ratio : 1;
+    const plotWidth = Math.max(Math.round(width * 0.18), Math.round((fullRight - fullLeft) * hScale));
+    const centerX = Math.round((fullLeft + fullRight) / 2);
+    const left = centerX - Math.round(plotWidth / 2);
+    const right = left + plotWidth;
+    const minContent = top + bottomPad + minPlotHeight + Math.round(140 * scale);
+    const contentHeight = Math.min(height, Math.max(minContent, Math.round(height * vScale)));
+    let tableHeight = clamp(Math.round(contentHeight * 0.14), Math.round(44 * scale), Math.round(92 * scale));
     let xLabelBand = Math.max(Math.round(46 * scale), 30);
-    let tableTop = height - bottomPad - tableHeight;
+    let tableTop = contentHeight - bottomPad - tableHeight;
     let plotBottom = tableTop - xLabelBand;
 
     if (plotBottom - top < minPlotHeight) {
-      const available = Math.max(86, height - top - bottomPad - minPlotHeight);
+      const available = Math.max(86, contentHeight - top - bottomPad - minPlotHeight);
       tableHeight = clamp(Math.round(available * 0.48), 34, 76);
       xLabelBand = clamp(available - tableHeight, 28, 54);
-      tableTop = height - bottomPad - tableHeight;
+      tableTop = contentHeight - bottomPad - tableHeight;
       plotBottom = Math.max(top + minPlotHeight, tableTop - xLabelBand);
     }
 
@@ -676,16 +692,29 @@ function boot() {
     };
   }
 
-  function getSlopeExportLayout(width, height, marginPercent) {
+  function getSlopeExportLayout(width, height, marginPercent, exaggeration = 20) {
     const scale = clamp(Math.min(width / EXPORT_BASE_WIDTH, height / 820), 0.48, 1.1);
     const pageMarginX = Math.round(width * (marginPercent / 100));
     const pageMarginY = Math.round(height * (marginPercent / 100));
-    const left = Math.max(pageMarginX + Math.round(58 * scale), Math.round(width * 0.11));
-    const right = width - Math.max(pageMarginX, Math.round(width * 0.045));
+    const fullLeft = Math.max(pageMarginX + Math.round(58 * scale), Math.round(width * 0.11));
+    const fullRight = width - Math.max(pageMarginX, Math.round(width * 0.045));
     const top = Math.max(pageMarginY + Math.round(32 * scale), Math.round(52 * scale));
-    const bottom = Math.max(top + Math.round(110 * scale), height - Math.max(pageMarginY + Math.round(44 * scale), Math.round(70 * scale)));
+    // Same fixed-paper rule as the elevation chart: up to 20 stretches the
+    // content height, beyond 20 narrows the content width (centered) so the
+    // exaggeration keeps increasing without resizing the page.
+    const ratio = exaggeration / 20;
+    const vScale = clamp(Math.min(ratio, 1), 0.2, 1);
+    const hScale = ratio > 1 ? 1 / ratio : 1;
+    const plotWidth = Math.max(Math.round(width * 0.18), Math.round((fullRight - fullLeft) * hScale));
+    const centerX = Math.round((fullLeft + fullRight) / 2);
+    const left = centerX - Math.round(plotWidth / 2);
+    const right = left + plotWidth;
+    const bottomGap = Math.max(pageMarginY + Math.round(44 * scale), Math.round(70 * scale));
+    const minContent = top + Math.round(110 * scale) + bottomGap;
+    const contentHeight = Math.min(height, Math.max(minContent, Math.round(height * vScale)));
+    const bottom = Math.max(top + Math.round(110 * scale), contentHeight - bottomGap);
     return {
-      plot: { left, top, right, bottom: Math.min(bottom, height - Math.max(36, pageMarginY)) },
+      plot: { left, top, right, bottom: Math.min(bottom, contentHeight - Math.max(36, pageMarginY)) },
       tickFontSize: Math.max(9, Math.round(14 * scale)),
       labelFontSize: Math.max(10, Math.round(14 * scale)),
       titleFontSize: Math.max(11, Math.round(18 * scale)),
