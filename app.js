@@ -137,6 +137,33 @@ export function getNiceCeil(value, step) {
   return Math.ceil(value / step) * step;
 }
 
+export function getNiceFloor(value, step) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.floor(value / step) * step;
+}
+
+export function getAutoElevationAxis(minElevation, maxElevation) {
+  const minValue = Number.isFinite(minElevation) ? minElevation : 0;
+  const maxValue = Number.isFinite(maxElevation) ? maxElevation : 1;
+  const range = Math.max(1, maxValue - minValue);
+  const padding = Math.max(10, range * 0.08);
+  const shouldStartAtZero = minValue <= 120 || range > maxValue * 0.55;
+  const roughMin = shouldStartAtZero ? 0 : minValue - padding;
+  const roughMax = maxValue + padding;
+  const step = getNiceTickStep(Math.max(1, roughMax - roughMin), 7);
+  const min = shouldStartAtZero ? 0 : getNiceFloor(roughMin, step);
+  const max = Math.max(step, getNiceCeil(roughMax, step));
+  return { min, max, step };
+}
+
+export function getAutoSlopeAxis(slopes) {
+  const absMax = Math.max(0, ...slopes.map((value) => Math.abs(value)).filter(Number.isFinite));
+  const roughLimit = Math.max(5, absMax * 1.12);
+  const step = getNiceTickStep(roughLimit * 2, 8);
+  const limit = Math.max(step, getNiceCeil(roughLimit, step));
+  return { min: -limit, max: limit, step };
+}
+
 export async function fillMissingElevations(points, options) {
   const endpoint = options.endpoint.trim();
   const batchSize = Math.min(100, Math.max(1, options.batchSize || DEFAULT_BATCH_SIZE));
@@ -518,13 +545,12 @@ function boot() {
       right: width - margin.right,
       bottom: tableTop - Math.round(height * 0.045),
     };
-    const yStep = getNiceTickStep(stats.maxElevation, 6);
-    const yMax = getNiceCeil(Math.max(stats.maxElevation, stats.maxElevation * Math.max(1, 20 / exaggeration)) + yStep, yStep);
+    const yAxis = getAutoElevationAxis(stats.minElevation, stats.maxElevation);
     const xMax = Math.max(1, getNiceCeil(stats.totalKm, getNiceTickStep(stats.totalKm, 12)));
 
     drawWhitePage(ctx, width, height);
-    drawPlotFrame(ctx, plot, xMax, 0, yMax, "水平距離 [km]", "垂直距離 [m]");
-    drawLine(ctx, plot, stats.distancesKm, stats.elevations, xMax, 0, yMax, "#001eff", 3);
+    drawPlotFrame(ctx, plot, xMax, yAxis.min, yAxis.max, "水平距離 [km]", "垂直距離 [m]", yAxis.step);
+    drawLine(ctx, plot, stats.distancesKm, stats.elevations, xMax, yAxis.min, yAxis.max, "#001eff", 3);
 
     drawCenteredText(ctx, "断面図", width / 2, margin.top - 18, 18, "#000");
     drawRightText(ctx, `水平：垂直 = 1：${exaggeration}`, plot.right - 12, plot.top + 22, 18, "#000");
@@ -543,14 +569,14 @@ function boot() {
       right: Math.round(width * 0.94),
       bottom: Math.round(height * 0.76),
     };
-    const yLimit = Math.max(45, getNiceCeil(Math.max(...stats.slopes.map(Math.abs)) + 5, 10));
+    const yAxis = getAutoSlopeAxis(stats.slopes);
     const xMax = Math.max(1, getNiceCeil(stats.totalKm, getNiceTickStep(stats.totalKm, 12)));
 
     drawWhitePage(ctx, width, height);
-    drawPlotFrame(ctx, plot, xMax, -yLimit, yLimit, "距離 [km]", "傾斜角 [度]");
-    const zeroY = mapValue(0, -yLimit, yLimit, plot.bottom, plot.top);
+    drawPlotFrame(ctx, plot, xMax, yAxis.min, yAxis.max, "距離 [km]", "傾斜角 [度]", yAxis.step);
+    const zeroY = mapValue(0, yAxis.min, yAxis.max, plot.bottom, plot.top);
     drawLineSegment(ctx, plot.left, zeroY, plot.right, zeroY, "#333", 1, [2, 3]);
-    drawLine(ctx, plot, stats.distancesKm, stats.slopes, xMax, -yLimit, yLimit, "#008000", 2);
+    drawLine(ctx, plot, stats.distancesKm, stats.slopes, xMax, yAxis.min, yAxis.max, "#008000", 2);
     drawCenteredText(ctx, "傾斜角", width / 2, plot.top - 18, 18, "#000");
     drawRightText(ctx, `強調度： ${exaggeration}`, plot.right - 18, plot.top + 28, 18, "#000");
   }
@@ -570,14 +596,14 @@ function boot() {
     ctx.restore();
   }
 
-  function drawPlotFrame(ctx, plot, xMax, yMin, yMax, xLabel, yLabel) {
+  function drawPlotFrame(ctx, plot, xMax, yMin, yMax, xLabel, yLabel, explicitYStep = null) {
     ctx.save();
     ctx.strokeStyle = "#000";
     ctx.lineWidth = 1.2;
     ctx.strokeRect(plot.left, plot.top, plot.right - plot.left, plot.bottom - plot.top);
 
     const xStep = xMax <= 60 ? 1 : Math.max(1, getNiceTickStep(xMax, 18));
-    const yStep = getNiceTickStep(yMax - yMin, 8);
+    const yStep = explicitYStep ?? getNiceTickStep(yMax - yMin, 8);
     ctx.font = "14px 'Yu Gothic', Meiryo, sans-serif";
     ctx.fillStyle = "#000";
     ctx.textAlign = "center";
@@ -725,6 +751,8 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
   window.GeoSectionCore = {
     computeRouteStats,
     fillMissingElevations,
+    getAutoElevationAxis,
+    getAutoSlopeAxis,
     getExportCanvasSize,
     getNiceCeil,
     getNiceTickStep,

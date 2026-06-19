@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import {
   computeRouteStats,
+  getAutoElevationAxis,
+  getAutoSlopeAxis,
   getExportCanvasSize,
   getNiceCeil,
   getNiceTickStep,
@@ -32,6 +34,9 @@ assert.deepEqual(getExportCanvasSize("a4-landscape", 1600), { width: 1600, heigh
 assert.deepEqual(getExportCanvasSize("a4-portrait", 1600), { width: 1600, height: 2263, label: "A4 縦" });
 assert.equal(getNiceTickStep(44, 12), 5);
 assert.equal(getNiceCeil(44.05, 5), 45);
+assert.deepEqual(getAutoElevationAxis(0, 900), { min: 0, max: 1000, step: 200 });
+assert.deepEqual(getAutoElevationAxis(780, 1040), { min: 750, max: 1100, step: 50 });
+assert.deepEqual(getAutoSlopeAxis([-4, 8, 12]), { min: -15, max: 15, step: 5 });
 
 const routes = JSON.parse(await readFile(new URL("../data/routes.json", import.meta.url), "utf8"));
 assert.equal(routes.length, 15);
