@@ -633,35 +633,41 @@ function boot() {
     ctx.textAlign = options.xLabelAlign === "left" ? "right" : "center";
     ctx.textBaseline = "top";
     ctx.fillText(xLabel, options.xLabelAlign === "left" ? plot.left - 16 : (plot.left + plot.right) / 2, plot.bottom + 38);
-    if (options.showYAxisBreak) {
-      drawYAxisBreak(ctx, plot.left, plot.bottom);
-    }
     ctx.save();
     ctx.translate(plot.left - 58, (plot.top + plot.bottom) / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textBaseline = "middle";
     ctx.fillText(yLabel, 0, 0);
     ctx.restore();
+    if (options.showYAxisBreak) {
+      drawYAxisBreak(ctx, plot.left + 10, plot.bottom - 4);
+    }
     ctx.restore();
   }
 
   function drawYAxisBreak(ctx, x, y) {
     ctx.save();
-    ctx.strokeStyle = "#000";
-    ctx.lineWidth = 2;
-    const width = 22;
-    const amplitude = 3.5;
-    for (let line = 0; line < 2; line += 1) {
-      const offsetY = y - 10 + line * 6;
-      ctx.beginPath();
-      for (let i = 0; i <= width; i += 2) {
-        const px = x - width / 2 + i;
-        const py = offsetY + Math.sin((i / width) * Math.PI * 2) * amplitude;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
+    const width = 28;
+    const amplitude = 3.2;
+    const drawWave = (strokeStyle, lineWidth) => {
+      ctx.strokeStyle = strokeStyle;
+      ctx.lineWidth = lineWidth;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      for (let line = 0; line < 2; line += 1) {
+        const offsetY = y - 7 + line * 6;
+        ctx.beginPath();
+        for (let i = 0; i <= width; i += 2) {
+          const px = x - width / 2 + i;
+          const py = offsetY + Math.sin((i / width) * Math.PI * 2) * amplitude;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
-    }
+    };
+    drawWave("#fff", 6);
+    drawWave("#000", 2.2);
     ctx.restore();
   }
 
