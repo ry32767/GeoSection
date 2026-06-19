@@ -96,6 +96,24 @@
             <input id="export-exaggeration" type="range" min="1" max="50" value="20" />
           </label>
           <output id="export-exaggeration-output" for="export-exaggeration">20</output>
+          <label>
+            断面図の色
+            <input id="elevation-color" type="color" value="#001eff" />
+          </label>
+          <label>
+            傾斜図の色
+            <input id="slope-color" type="color" value="#008000" />
+          </label>
+          <label>
+            用紙余白
+            <input id="page-margin" type="range" min="4" max="16" value="8" />
+          </label>
+          <output id="page-margin-output" for="page-margin">8%</output>
+          <label>
+            プレビュー幅
+            <input id="preview-scale" type="range" min="45" max="100" value="100" />
+          </label>
+          <output id="preview-scale-output" for="preview-scale">100%</output>
           <button id="export-elevation" type="button" disabled>断面図 PNG</button>
           <button id="export-slope" type="button" disabled>傾斜図 PNG</button>
         </div>
@@ -136,6 +154,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
-    <script type="module" src="./app.js?v=20260619-axis-break"></script>
+    <script type="module" src="./app.js?v=20260619-layout-color"></script>
   </body>
 </html>
