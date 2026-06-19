@@ -1,6 +1,8 @@
 const EARTH_RADIUS_M = 6371008.8;
 const DEFAULT_BATCH_SIZE = 80;
 const EXPORT_BASE_WIDTH = 1600;
+const DEFAULT_ELEVATION_COLOR = "#001eff";
+const DEFAULT_SLOPE_COLOR = "#008000";
 const PAPER_SIZES = {
   "a4-landscape": { ratio: 297 / 210, label: "A4 横" },
   "a4-portrait": { ratio: 210 / 297, label: "A4 縦" },
@@ -143,6 +145,10 @@ export function getNiceFloor(value, step) {
   return Math.floor(value / step) * step;
 }
 
+export function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
 export function getAutoElevationAxis(minElevation, maxElevation) {
   const minValue = Number.isFinite(minElevation) ? minElevation : 0;
   const maxValue = Number.isFinite(maxElevation) ? maxElevation : 1;
@@ -252,6 +258,12 @@ function boot() {
   const paperSizeInput = document.querySelector("#paper-size");
   const exportExaggerationInput = document.querySelector("#export-exaggeration");
   const exportExaggerationOutput = document.querySelector("#export-exaggeration-output");
+  const elevationColorInput = document.querySelector("#elevation-color");
+  const slopeColorInput = document.querySelector("#slope-color");
+  const pageMarginInput = document.querySelector("#page-margin");
+  const pageMarginOutput = document.querySelector("#page-margin-output");
+  const previewScaleInput = document.querySelector("#preview-scale");
+  const previewScaleOutput = document.querySelector("#preview-scale-output");
   const exportElevationButton = document.querySelector("#export-elevation");
   const exportSlopeButton = document.querySelector("#export-slope");
   const exportNote = document.querySelector("#export-note");
@@ -274,6 +286,7 @@ function boot() {
   let latestFileName = "route.gpx";
   let latestParsed = null;
   let latestStats = null;
+  let latestPoints = null;
 
   const map = L.map("map", { scrollWheelZoom: true }).setView([35.6812, 139.7671], 6);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -295,6 +308,25 @@ function boot() {
   exportExaggerationInput.addEventListener("input", () => {
     exportExaggerationOutput.value = exportExaggerationInput.value;
     if (latestStats) renderExportCanvases();
+  });
+
+  pageMarginInput.addEventListener("input", () => {
+    pageMarginOutput.value = `${pageMarginInput.value}%`;
+    if (latestStats) renderExportCanvases();
+  });
+
+  previewScaleInput.addEventListener("input", () => {
+    previewScaleOutput.value = `${previewScaleInput.value}%`;
+    applyPreviewScale();
+  });
+
+  [elevationColorInput, slopeColorInput].forEach((input) => {
+    input.addEventListener("input", () => {
+      if (latestStats && latestPoints) {
+        renderCharts(latestStats.distancesKm.map((km) => km.toFixed(2)), latestStats, latestPoints);
+        renderExportCanvases();
+      }
+    });
   });
 
   exportElevationButton.addEventListener("click", () => {
@@ -409,6 +441,7 @@ function boot() {
   function renderAnalysis(points) {
     const stats = computeRouteStats(points, Number.parseInt(smoothingInput.value, 10));
     latestStats = stats;
+    latestPoints = points;
     const latLngs = points.map((point) => [point.lat, point.lon]);
     const labels = stats.distancesKm.map((km) => km.toFixed(2));
 
@@ -434,6 +467,7 @@ function boot() {
   }
 
   function renderCharts(labels, stats, points) {
+    const colors = getGraphColors();
     const chartOptions = (unit, color) => ({
       responsive: true,
       maintainAspectRatio: false,
@@ -471,8 +505,8 @@ function boot() {
         {
           label: "標高",
           data: stats.elevations.map((value) => Math.round(value * 10) / 10),
-          borderColor: "#1f7a5c",
-          backgroundColor: "rgba(31, 122, 92, 0.16)",
+          borderColor: colors.elevation,
+          backgroundColor: colorWithAlpha(colors.elevation, 0.16),
           fill: true,
           pointRadius: 0,
           tension: 0.18,
@@ -485,8 +519,8 @@ function boot() {
         {
           label: "傾斜角",
           data: stats.slopes.map((value) => Math.round(value * 10) / 10),
-          borderColor: "#d56b1f",
-          backgroundColor: "rgba(213, 107, 31, 0.12)",
+          borderColor: colors.slope,
+          backgroundColor: colorWithAlpha(colors.slope, 0.12),
           fill: true,
           pointRadius: 0,
           tension: 0.16,
@@ -499,12 +533,12 @@ function boot() {
     elevationChart = new Chart(document.querySelector("#elevation-chart"), {
       type: "line",
       data: elevationData,
-      options: chartOptions("標高 [m]", "#1f7a5c"),
+      options: chartOptions("標高 [m]", colors.elevation),
     });
     slopeChart = new Chart(document.querySelector("#slope-chart"), {
       type: "line",
       data: slopeData,
-      options: chartOptions("傾斜角 [度]", "#d56b1f"),
+      options: chartOptions("傾斜角 [度]", colors.slope),
     });
   }
 
@@ -523,29 +557,21 @@ function boot() {
     if (!latestStats) return;
     const exaggeration = Number.parseInt(exportExaggerationInput.value, 10);
     const size = getExportCanvasSize(paperSizeInput.value, EXPORT_BASE_WIDTH, exaggeration);
-    drawElevationExport(exportElevationCanvas, latestStats, size, exaggeration);
-    drawSlopeExport(exportSlopeCanvas, latestStats, size, exaggeration);
+    const options = getExportOptions();
+    applyPreviewScale();
+    drawElevationExport(exportElevationCanvas, latestStats, size, exaggeration, options);
+    drawSlopeExport(exportSlopeCanvas, latestStats, size, exaggeration, options);
     exportNote.textContent = `${size.label} / 縦強調 ${exaggeration} / ${size.width}x${size.height}px`;
   }
 
-  function drawElevationExport(canvas, stats, size, exaggeration) {
+  function drawElevationExport(canvas, stats, size, exaggeration, options) {
     setupCanvas(canvas, size);
     const ctx = canvas.getContext("2d");
     const width = canvas.width;
     const height = canvas.height;
-    const margin = {
-      left: Math.round(width * 0.16),
-      right: Math.round(width * 0.06),
-      top: Math.round(height * 0.08),
-      bottom: Math.round(height * 0.26),
-    };
-    const tableTop = height - margin.bottom + Math.round(height * 0.045);
-    const plot = {
-      left: margin.left,
-      top: margin.top,
-      right: width - margin.right,
-      bottom: tableTop - Math.round(height * 0.045),
-    };
+    const layout = getElevationExportLayout(width, height, options.marginPercent);
+    const { plot } = layout;
+    const margin = { top: plot.top };
     const yAxis = getAutoElevationAxis(stats.minElevation, stats.maxElevation);
     const xMax = Math.max(1, getNiceCeil(stats.totalKm, getNiceTickStep(stats.totalKm, 12)));
 
@@ -554,26 +580,30 @@ function boot() {
       yStep: yAxis.step,
       xLabelAlign: "left",
       showYAxisBreak: yAxis.min > 0,
+      tickFontSize: layout.tickFontSize,
+      labelFontSize: layout.labelFontSize,
+      xTickOffset: layout.xTickOffset,
+      xLabelOffset: layout.xLabelOffset,
+      yLabelOffset: layout.yLabelOffset,
     });
-    drawLine(ctx, plot, stats.distancesKm, stats.elevations, xMax, yAxis.min, yAxis.max, "#001eff", 3);
+    drawLine(ctx, plot, stats.distancesKm, stats.elevations, xMax, yAxis.min, yAxis.max, options.elevationColor, layout.lineWidth);
 
     drawCenteredText(ctx, "断面図", width / 2, margin.top - 18, 18, "#000");
     drawRightText(ctx, `水平：垂直 = 1：${exaggeration}`, plot.right - 12, plot.top + 22, 18, "#000");
     drawRightText(ctx, `総距離: ${stats.totalKm.toFixed(2)} km`, plot.right - 12, plot.top + 52, 18, "#000");
-    drawElevationTable(ctx, plot.left, tableTop, plot.right - plot.left, Math.round(height * 0.14));
+    drawElevationTable(ctx, plot.left, layout.tableTop, plot.right - plot.left, layout.tableHeight, {
+      fontSize: layout.tableFontSize,
+      labelGap: layout.tableLabelGap,
+    });
   }
 
-  function drawSlopeExport(canvas, stats, size, exaggeration) {
+  function drawSlopeExport(canvas, stats, size, exaggeration, options) {
     setupCanvas(canvas, size);
     const ctx = canvas.getContext("2d");
     const width = canvas.width;
     const height = canvas.height;
-    const plot = {
-      left: Math.round(width * 0.13),
-      top: Math.round(height * 0.12),
-      right: Math.round(width * 0.94),
-      bottom: Math.round(height * 0.76),
-    };
+    const layout = getSlopeExportLayout(width, height, options.marginPercent);
+    const { plot } = layout;
     const yAxis = getAutoSlopeAxis(stats.slopes);
     const xMax = Math.max(1, getNiceCeil(stats.totalKm, getNiceTickStep(stats.totalKm, 12)));
 
@@ -581,9 +611,99 @@ function boot() {
     drawPlotFrame(ctx, plot, xMax, yAxis.min, yAxis.max, "距離 [km]", "傾斜角 [度]", { yStep: yAxis.step });
     const zeroY = mapValue(0, yAxis.min, yAxis.max, plot.bottom, plot.top);
     drawLineSegment(ctx, plot.left, zeroY, plot.right, zeroY, "#333", 1, [2, 3]);
-    drawLine(ctx, plot, stats.distancesKm, stats.slopes, xMax, yAxis.min, yAxis.max, "#008000", 2);
+    drawLine(ctx, plot, stats.distancesKm, stats.slopes, xMax, yAxis.min, yAxis.max, options.slopeColor, layout.lineWidth);
     drawCenteredText(ctx, "傾斜角", width / 2, plot.top - 18, 18, "#000");
     drawRightText(ctx, `強調度： ${exaggeration}`, plot.right - 18, plot.top + 28, 18, "#000");
+  }
+
+  function getExportOptions() {
+    return {
+      elevationColor: elevationColorInput.value || DEFAULT_ELEVATION_COLOR,
+      slopeColor: slopeColorInput.value || DEFAULT_SLOPE_COLOR,
+      marginPercent: clamp(Number.parseInt(pageMarginInput.value, 10) || 8, 4, 16),
+    };
+  }
+
+  function getGraphColors() {
+    return {
+      elevation: elevationColorInput.value || DEFAULT_ELEVATION_COLOR,
+      slope: slopeColorInput.value || DEFAULT_SLOPE_COLOR,
+    };
+  }
+
+  function applyPreviewScale() {
+    document.documentElement.style.setProperty("--paper-preview-scale", `${previewScaleInput.value}%`);
+  }
+
+  function getElevationExportLayout(width, height, marginPercent) {
+    const scale = clamp(Math.min(width / EXPORT_BASE_WIDTH, height / 980), 0.45, 1.1);
+    const pageMarginX = Math.round(width * (marginPercent / 100));
+    const pageMarginY = Math.round(height * (marginPercent / 100));
+    const left = Math.max(pageMarginX + Math.round(78 * scale), Math.round(width * 0.13));
+    const right = width - Math.max(pageMarginX, Math.round(width * 0.045));
+    const top = Math.max(pageMarginY + Math.round(28 * scale), Math.round(36 * scale));
+    const bottomPad = Math.max(pageMarginY, Math.round(16 * scale));
+    const minPlotHeight = Math.max(76, Math.round(120 * scale));
+    let tableHeight = clamp(Math.round(height * 0.14), Math.round(44 * scale), Math.round(92 * scale));
+    let xLabelBand = Math.max(Math.round(46 * scale), 30);
+    let tableTop = height - bottomPad - tableHeight;
+    let plotBottom = tableTop - xLabelBand;
+
+    if (plotBottom - top < minPlotHeight) {
+      const available = Math.max(86, height - top - bottomPad - minPlotHeight);
+      tableHeight = clamp(Math.round(available * 0.48), 34, 76);
+      xLabelBand = clamp(available - tableHeight, 28, 54);
+      tableTop = height - bottomPad - tableHeight;
+      plotBottom = Math.max(top + minPlotHeight, tableTop - xLabelBand);
+    }
+
+    return {
+      plot: { left, top, right, bottom: plotBottom },
+      tableTop: Math.max(plotBottom + xLabelBand, tableTop),
+      tableHeight,
+      tickFontSize: Math.max(9, Math.round(14 * scale)),
+      labelFontSize: Math.max(10, Math.round(14 * scale)),
+      titleFontSize: Math.max(11, Math.round(18 * scale)),
+      infoFontSize: Math.max(10, Math.round(18 * scale)),
+      tableFontSize: Math.max(9, Math.round(16 * scale)),
+      tableLabelGap: Math.max(8, Math.round(14 * scale)),
+      xTickOffset: Math.max(5, Math.round(8 * scale)),
+      xLabelOffset: Math.max(22, Math.round(34 * scale)),
+      yLabelOffset: Math.max(38, Math.round(58 * scale)),
+      lineWidth: Math.max(1.5, Math.round(3 * scale * 10) / 10),
+      infoLine1: Math.max(16, Math.round(22 * scale)),
+      infoLine2: Math.max(34, Math.round(52 * scale)),
+    };
+  }
+
+  function getSlopeExportLayout(width, height, marginPercent) {
+    const scale = clamp(Math.min(width / EXPORT_BASE_WIDTH, height / 820), 0.48, 1.1);
+    const pageMarginX = Math.round(width * (marginPercent / 100));
+    const pageMarginY = Math.round(height * (marginPercent / 100));
+    const left = Math.max(pageMarginX + Math.round(58 * scale), Math.round(width * 0.11));
+    const right = width - Math.max(pageMarginX, Math.round(width * 0.045));
+    const top = Math.max(pageMarginY + Math.round(32 * scale), Math.round(52 * scale));
+    const bottom = Math.max(top + Math.round(110 * scale), height - Math.max(pageMarginY + Math.round(44 * scale), Math.round(70 * scale)));
+    return {
+      plot: { left, top, right, bottom: Math.min(bottom, height - Math.max(36, pageMarginY)) },
+      tickFontSize: Math.max(9, Math.round(14 * scale)),
+      labelFontSize: Math.max(10, Math.round(14 * scale)),
+      titleFontSize: Math.max(11, Math.round(18 * scale)),
+      infoFontSize: Math.max(10, Math.round(18 * scale)),
+      xTickOffset: Math.max(5, Math.round(8 * scale)),
+      xLabelOffset: Math.max(22, Math.round(34 * scale)),
+      yLabelOffset: Math.max(38, Math.round(58 * scale)),
+      lineWidth: Math.max(1.2, Math.round(2 * scale * 10) / 10),
+      infoLine1: Math.max(18, Math.round(28 * scale)),
+    };
+  }
+
+  function colorWithAlpha(hex, alpha) {
+    const normalized = /^#[0-9a-f]{6}$/i.test(hex) ? hex.slice(1) : DEFAULT_ELEVATION_COLOR.slice(1);
+    const r = Number.parseInt(normalized.slice(0, 2), 16);
+    const g = Number.parseInt(normalized.slice(2, 4), 16);
+    const b = Number.parseInt(normalized.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
   function setupCanvas(canvas, size) {
@@ -610,7 +730,12 @@ function boot() {
 
     const xStep = xMax <= 60 ? 1 : Math.max(1, getNiceTickStep(xMax, 18));
     const yStep = options.yStep ?? getNiceTickStep(yMax - yMin, 8);
-    ctx.font = "14px 'Yu Gothic', Meiryo, sans-serif";
+    const tickFontSize = options.tickFontSize ?? 14;
+    const labelFontSize = options.labelFontSize ?? 14;
+    const xTickOffset = options.xTickOffset ?? 8;
+    const xLabelOffset = options.xLabelOffset ?? 38;
+    const yLabelOffset = options.yLabelOffset ?? 58;
+    ctx.font = `${tickFontSize}px 'Yu Gothic', Meiryo, sans-serif`;
     ctx.fillStyle = "#000";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
@@ -618,7 +743,7 @@ function boot() {
     for (let x = 0; x <= xMax + 0.0001; x += xStep) {
       const px = mapValue(x, 0, xMax, plot.left, plot.right);
       drawLineSegment(ctx, px, plot.top, px, plot.bottom, "#b7b7b7", 1);
-      ctx.fillText(String(Math.round(x)), px, plot.bottom + 8);
+      ctx.fillText(String(Math.round(x)), px, plot.bottom + xTickOffset);
     }
 
     ctx.textAlign = "right";
@@ -632,9 +757,10 @@ function boot() {
 
     ctx.textAlign = options.xLabelAlign === "left" ? "right" : "center";
     ctx.textBaseline = "top";
-    ctx.fillText(xLabel, options.xLabelAlign === "left" ? plot.left - 16 : (plot.left + plot.right) / 2, plot.bottom + 38);
+    ctx.font = `${labelFontSize}px 'Yu Gothic', Meiryo, sans-serif`;
+    ctx.fillText(xLabel, options.xLabelAlign === "left" ? plot.left - 16 : (plot.left + plot.right) / 2, plot.bottom + xLabelOffset);
     ctx.save();
-    ctx.translate(plot.left - 58, (plot.top + plot.bottom) / 2);
+    ctx.translate(plot.left - yLabelOffset, (plot.top + plot.bottom) / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textBaseline = "middle";
     ctx.fillText(yLabel, 0, 0);
@@ -686,7 +812,7 @@ function boot() {
     ctx.restore();
   }
 
-  function drawElevationTable(ctx, left, top, width, height) {
+  function drawElevationTable(ctx, left, top, width, height, options = {}) {
     const rows = ["地点間距離 [km]", "地点名（標高 [m]）", "植生"];
     ctx.save();
     ctx.strokeStyle = "#000";
@@ -697,12 +823,12 @@ function boot() {
       drawLineSegment(ctx, left, y, left + width, y, "#000", 1.2);
     }
     ctx.fillStyle = "#000";
-    ctx.font = "16px 'Yu Gothic', Meiryo, sans-serif";
+    ctx.font = `${options.fontSize ?? 16}px 'Yu Gothic', Meiryo, sans-serif`;
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
     rows.forEach((label, index) => {
       const y = top + (height / rows.length) * (index + 0.5);
-      ctx.fillText(label, left - 14, y);
+      ctx.fillText(label, left - (options.labelGap ?? 14), y);
     });
     ctx.restore();
   }
@@ -768,6 +894,10 @@ function boot() {
     batchSizeInput.disabled = isBusy;
     paperSizeInput.disabled = isBusy;
     exportExaggerationInput.disabled = isBusy;
+    elevationColorInput.disabled = isBusy;
+    slopeColorInput.disabled = isBusy;
+    pageMarginInput.disabled = isBusy;
+    previewScaleInput.disabled = isBusy;
     exportElevationButton.disabled = isBusy || !latestStats;
     exportSlopeButton.disabled = isBusy || !latestStats;
     routeButtons.querySelectorAll("button").forEach((button) => {
