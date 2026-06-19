@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
-import { computeRouteStats, haversineMeters, movingAverage, needsElevation } from "../app.js";
+import {
+  computeRouteStats,
+  getExportCanvasSize,
+  getNiceCeil,
+  getNiceTickStep,
+  haversineMeters,
+  movingAverage,
+  needsElevation,
+} from "../app.js";
 
 const oneDegreeLonAtEquator = haversineMeters({ lat: 0, lon: 0 }, { lat: 0, lon: 1 });
 assert.ok(oneDegreeLonAtEquator > 111000 && oneDegreeLonAtEquator < 112000);
@@ -20,6 +28,10 @@ assert.equal(stats.maxElevation, 130);
 assert.equal(needsElevation(route), false);
 assert.equal(needsElevation([{ lat: 1, lon: 1, elevation: null }]), true);
 assert.deepEqual(movingAverage([0, 10, 20, 30], 3), [5, 10, 20, 25]);
+assert.deepEqual(getExportCanvasSize("a4-landscape", 1600), { width: 1600, height: 1131, label: "A4 横" });
+assert.deepEqual(getExportCanvasSize("a4-portrait", 1600), { width: 1600, height: 2263, label: "A4 縦" });
+assert.equal(getNiceTickStep(44, 12), 5);
+assert.equal(getNiceCeil(44.05, 5), 45);
 
 const routes = JSON.parse(await readFile(new URL("../data/routes.json", import.meta.url), "utf8"));
 assert.equal(routes.length, 15);

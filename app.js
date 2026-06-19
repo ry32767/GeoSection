@@ -1,5 +1,13 @@
 const EARTH_RADIUS_M = 6371008.8;
 const DEFAULT_BATCH_SIZE = 80;
+const EXPORT_BASE_WIDTH = 1600;
+const PAPER_SIZES = {
+  "a4-landscape": { ratio: 297 / 210, label: "A4 横" },
+  "a4-portrait": { ratio: 210 / 297, label: "A4 縦" },
+  "a3-landscape": { ratio: 420 / 297, label: "A3 横" },
+  "a3-portrait": { ratio: 297 / 420, label: "A3 縦" },
+  wide: { ratio: 16 / 9, label: "ワイド 16:9" },
+};
 
 export function haversineMeters(a, b) {
   const toRad = (value) => (value * Math.PI) / 180;
@@ -104,6 +112,31 @@ export function needsElevation(points) {
   return points.some((point) => point.elevation === null);
 }
 
+export function getExportCanvasSize(paperKey, width = EXPORT_BASE_WIDTH) {
+  const paper = PAPER_SIZES[paperKey] ?? PAPER_SIZES["a4-landscape"];
+  return {
+    width,
+    height: Math.round(width / paper.ratio),
+    label: paper.label,
+  };
+}
+
+export function getNiceTickStep(maxValue, targetTicks = 10) {
+  if (!Number.isFinite(maxValue) || maxValue <= 0) return 1;
+  const rawStep = maxValue / targetTicks;
+  const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+  const normalized = rawStep / magnitude;
+  if (normalized <= 1) return magnitude;
+  if (normalized <= 2) return 2 * magnitude;
+  if (normalized <= 5) return 5 * magnitude;
+  return 10 * magnitude;
+}
+
+export function getNiceCeil(value, step) {
+  if (!Number.isFinite(value) || value <= 0) return step;
+  return Math.ceil(value / step) * step;
+}
+
 export async function fillMissingElevations(points, options) {
   const endpoint = options.endpoint.trim();
   const batchSize = Math.min(100, Math.max(1, options.batchSize || DEFAULT_BATCH_SIZE));
@@ -188,6 +221,14 @@ function boot() {
   const smoothingOutput = document.querySelector("#smoothing-output");
   const downloadButton = document.querySelector("#download-gpx");
   const fitMapButton = document.querySelector("#fit-map");
+  const paperSizeInput = document.querySelector("#paper-size");
+  const exportExaggerationInput = document.querySelector("#export-exaggeration");
+  const exportExaggerationOutput = document.querySelector("#export-exaggeration-output");
+  const exportElevationButton = document.querySelector("#export-elevation");
+  const exportSlopeButton = document.querySelector("#export-slope");
+  const exportNote = document.querySelector("#export-note");
+  const exportElevationCanvas = document.querySelector("#export-elevation-canvas");
+  const exportSlopeCanvas = document.querySelector("#export-slope-canvas");
   const elevationNote = document.querySelector("#elevation-note");
   const slopeNote = document.querySelector("#slope-note");
   const metrics = {
@@ -204,6 +245,7 @@ function boot() {
   let latestGpxText = "";
   let latestFileName = "route.gpx";
   let latestParsed = null;
+  let latestStats = null;
 
   const map = L.map("map", { scrollWheelZoom: true }).setView([35.6812, 139.7671], 6);
   L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -216,6 +258,23 @@ function boot() {
   smoothingInput.addEventListener("input", () => {
     smoothingOutput.value = `${smoothingInput.value} 点`;
     if (latestParsed) renderAnalysis(latestParsed.points);
+  });
+
+  paperSizeInput.addEventListener("change", () => {
+    if (latestStats) renderExportCanvases();
+  });
+
+  exportExaggerationInput.addEventListener("input", () => {
+    exportExaggerationOutput.value = exportExaggerationInput.value;
+    if (latestStats) renderExportCanvases();
+  });
+
+  exportElevationButton.addEventListener("click", () => {
+    downloadCanvas(exportElevationCanvas, `${latestFileName}_profile.png`);
+  });
+
+  exportSlopeButton.addEventListener("click", () => {
+    downloadCanvas(exportSlopeCanvas, `${latestFileName}_slope.png`);
   });
 
   fileInput.addEventListener("change", async () => {
@@ -314,16 +373,20 @@ function boot() {
     renderAnalysis(parsed.points);
     downloadButton.disabled = false;
     fitMapButton.disabled = false;
+    exportElevationButton.disabled = false;
+    exportSlopeButton.disabled = false;
     updateStatus("解析が完了しました。");
   }
 
   function renderAnalysis(points) {
     const stats = computeRouteStats(points, Number.parseInt(smoothingInput.value, 10));
+    latestStats = stats;
     const latLngs = points.map((point) => [point.lat, point.lon]);
     const labels = stats.distancesKm.map((km) => km.toFixed(2));
 
     renderMap(latLngs);
     renderCharts(labels, stats, points);
+    renderExportCanvases();
     updateMetrics(stats);
     slopeNote.textContent = `${smoothingInput.value} 点移動平均`;
   }
@@ -428,6 +491,205 @@ function boot() {
     }).addTo(map);
   }
 
+  function renderExportCanvases() {
+    if (!latestStats) return;
+    const size = getExportCanvasSize(paperSizeInput.value);
+    const exaggeration = Number.parseInt(exportExaggerationInput.value, 10);
+    drawElevationExport(exportElevationCanvas, latestStats, size, exaggeration);
+    drawSlopeExport(exportSlopeCanvas, latestStats, size, exaggeration);
+    exportNote.textContent = `${size.label} / 縦強調 ${exaggeration}`;
+  }
+
+  function drawElevationExport(canvas, stats, size, exaggeration) {
+    setupCanvas(canvas, size);
+    const ctx = canvas.getContext("2d");
+    const width = canvas.width;
+    const height = canvas.height;
+    const margin = {
+      left: Math.round(width * 0.16),
+      right: Math.round(width * 0.06),
+      top: Math.round(height * 0.08),
+      bottom: Math.round(height * 0.26),
+    };
+    const tableTop = height - margin.bottom + Math.round(height * 0.045);
+    const plot = {
+      left: margin.left,
+      top: margin.top,
+      right: width - margin.right,
+      bottom: tableTop - Math.round(height * 0.045),
+    };
+    const yStep = getNiceTickStep(stats.maxElevation, 6);
+    const yMax = getNiceCeil(Math.max(stats.maxElevation, stats.maxElevation * Math.max(1, 20 / exaggeration)) + yStep, yStep);
+    const xMax = Math.max(1, getNiceCeil(stats.totalKm, getNiceTickStep(stats.totalKm, 12)));
+
+    drawWhitePage(ctx, width, height);
+    drawPlotFrame(ctx, plot, xMax, 0, yMax, "水平距離 [km]", "垂直距離 [m]");
+    drawLine(ctx, plot, stats.distancesKm, stats.elevations, xMax, 0, yMax, "#001eff", 3);
+
+    drawCenteredText(ctx, "断面図", width / 2, margin.top - 18, 18, "#000");
+    drawRightText(ctx, `水平：垂直 = 1：${exaggeration}`, plot.right - 12, plot.top + 22, 18, "#000");
+    drawRightText(ctx, `総距離: ${stats.totalKm.toFixed(2)} km`, plot.right - 12, plot.top + 52, 18, "#000");
+    drawElevationTable(ctx, plot.left, tableTop, plot.right - plot.left, Math.round(height * 0.14));
+  }
+
+  function drawSlopeExport(canvas, stats, size, exaggeration) {
+    setupCanvas(canvas, size);
+    const ctx = canvas.getContext("2d");
+    const width = canvas.width;
+    const height = canvas.height;
+    const plot = {
+      left: Math.round(width * 0.13),
+      top: Math.round(height * 0.12),
+      right: Math.round(width * 0.94),
+      bottom: Math.round(height * 0.76),
+    };
+    const yLimit = Math.max(45, getNiceCeil(Math.max(...stats.slopes.map(Math.abs)) + 5, 10));
+    const xMax = Math.max(1, getNiceCeil(stats.totalKm, getNiceTickStep(stats.totalKm, 12)));
+
+    drawWhitePage(ctx, width, height);
+    drawPlotFrame(ctx, plot, xMax, -yLimit, yLimit, "距離 [km]", "傾斜角 [度]");
+    const zeroY = mapValue(0, -yLimit, yLimit, plot.bottom, plot.top);
+    drawLineSegment(ctx, plot.left, zeroY, plot.right, zeroY, "#333", 1, [2, 3]);
+    drawLine(ctx, plot, stats.distancesKm, stats.slopes, xMax, -yLimit, yLimit, "#008000", 2);
+    drawCenteredText(ctx, "傾斜角", width / 2, plot.top - 18, 18, "#000");
+    drawRightText(ctx, `強調度： ${exaggeration}`, plot.right - 18, plot.top + 28, 18, "#000");
+  }
+
+  function setupCanvas(canvas, size) {
+    canvas.width = size.width;
+    canvas.height = size.height;
+  }
+
+  function drawWhitePage(ctx, width, height) {
+    ctx.save();
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.font = "14px 'Yu Gothic', Meiryo, sans-serif";
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.restore();
+  }
+
+  function drawPlotFrame(ctx, plot, xMax, yMin, yMax, xLabel, yLabel) {
+    ctx.save();
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(plot.left, plot.top, plot.right - plot.left, plot.bottom - plot.top);
+
+    const xStep = xMax <= 60 ? 1 : Math.max(1, getNiceTickStep(xMax, 18));
+    const yStep = getNiceTickStep(yMax - yMin, 8);
+    ctx.font = "14px 'Yu Gothic', Meiryo, sans-serif";
+    ctx.fillStyle = "#000";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+
+    for (let x = 0; x <= xMax + 0.0001; x += xStep) {
+      const px = mapValue(x, 0, xMax, plot.left, plot.right);
+      drawLineSegment(ctx, px, plot.top, px, plot.bottom, "#b7b7b7", 1);
+      ctx.fillText(String(Math.round(x)), px, plot.bottom + 8);
+    }
+
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    const yStart = Math.ceil(yMin / yStep) * yStep;
+    for (let y = yStart; y <= yMax + 0.0001; y += yStep) {
+      const py = mapValue(y, yMin, yMax, plot.bottom, plot.top);
+      drawLineSegment(ctx, plot.left, py, plot.right, py, "#b7b7b7", 1);
+      ctx.fillText(String(Math.round(y)), plot.left - 10, py);
+    }
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillText(xLabel, (plot.left + plot.right) / 2, plot.bottom + 38);
+    ctx.save();
+    ctx.translate(plot.left - 58, (plot.top + plot.bottom) / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textBaseline = "middle";
+    ctx.fillText(yLabel, 0, 0);
+    ctx.restore();
+    ctx.restore();
+  }
+
+  function drawLine(ctx, plot, xs, ys, xMax, yMin, yMax, color, lineWidth) {
+    ctx.save();
+    ctx.beginPath();
+    xs.forEach((x, index) => {
+      const px = mapValue(x, 0, xMax, plot.left, plot.right);
+      const py = mapValue(ys[index], yMin, yMax, plot.bottom, plot.top);
+      if (index === 0) ctx.moveTo(px, py);
+      else ctx.lineTo(px, py);
+    });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawElevationTable(ctx, left, top, width, height) {
+    const rows = ["地点間距離 [km]", "地点名（標高 [m]）", "植生"];
+    ctx.save();
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(left, top, width, height);
+    for (let i = 1; i < rows.length; i += 1) {
+      const y = top + (height / rows.length) * i;
+      drawLineSegment(ctx, left, y, left + width, y, "#000", 1.2);
+    }
+    ctx.fillStyle = "#000";
+    ctx.font = "16px 'Yu Gothic', Meiryo, sans-serif";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    rows.forEach((label, index) => {
+      const y = top + (height / rows.length) * (index + 0.5);
+      ctx.fillText(label, left - 14, y);
+    });
+    ctx.restore();
+  }
+
+  function drawLineSegment(ctx, x1, y1, x2, y2, color, width, dash = []) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.setLineDash(dash);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawCenteredText(ctx, text, x, y, size, color) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.font = `${size}px 'Yu Gothic', Meiryo, sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+
+  function drawRightText(ctx, text, x, y, size, color) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.font = `${size}px 'Yu Gothic', Meiryo, sans-serif`;
+    ctx.textAlign = "right";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+
+  function mapValue(value, fromMin, fromMax, toMin, toMax) {
+    if (fromMax === fromMin) return toMin;
+    return toMin + ((value - fromMin) / (fromMax - fromMin)) * (toMax - toMin);
+  }
+
+  function downloadCanvas(canvas, filename) {
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/png");
+    link.download = filename;
+    link.click();
+  }
+
   function updateMetrics(stats) {
     metrics.distance.textContent = `${stats.totalKm.toFixed(2)} km`;
     metrics.ascent.textContent = `${Math.round(stats.ascent)} m`;
@@ -443,6 +705,10 @@ function boot() {
     fileInput.disabled = isBusy;
     endpointInput.disabled = isBusy;
     batchSizeInput.disabled = isBusy;
+    paperSizeInput.disabled = isBusy;
+    exportExaggerationInput.disabled = isBusy;
+    exportElevationButton.disabled = isBusy || !latestStats;
+    exportSlopeButton.disabled = isBusy || !latestStats;
     routeButtons.querySelectorAll("button").forEach((button) => {
       button.disabled = isBusy;
     });
@@ -459,6 +725,9 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
   window.GeoSectionCore = {
     computeRouteStats,
     fillMissingElevations,
+    getExportCanvasSize,
+    getNiceCeil,
+    getNiceTickStep,
     haversineMeters,
     movingAverage,
     needsElevation,

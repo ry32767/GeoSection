@@ -77,6 +77,7 @@ h2 {
 
 .control-panel,
 .route-library,
+.export-panel,
 .chart-panel {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -195,6 +196,51 @@ button:disabled {
   color: var(--text);
 }
 
+.export-panel {
+  margin: 14px 0;
+  padding: 14px;
+}
+
+.export-controls {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(180px, 1fr) 56px auto auto;
+  align-items: end;
+  gap: 12px;
+}
+
+select {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  padding: 8px 10px;
+  font: inherit;
+}
+
+.export-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.export-preview {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f4f4f4;
+  padding: 10px;
+}
+
+.export-preview canvas {
+  display: block;
+  width: 100% !important;
+  height: auto !important;
+  background: #fff;
+}
+
 .summary-band {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -285,6 +331,10 @@ canvas {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .export-controls {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .actions {
     justify-content: flex-start;
   }
@@ -302,6 +352,7 @@ canvas {
   }
 
   .settings-grid,
+  .export-controls,
   .summary-band {
     grid-template-columns: 1fr;
   }

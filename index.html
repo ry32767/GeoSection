@@ -75,6 +75,40 @@
         </div>
       </section>
 
+      <section class="export-panel" aria-label="印刷・エクスポート">
+        <div class="panel-title">
+          <h2>印刷・エクスポート</h2>
+          <span id="export-note">GPX 読み込み後に出力できます</span>
+        </div>
+        <div class="export-controls">
+          <label>
+            用紙
+            <select id="paper-size">
+              <option value="a4-landscape">A4 横</option>
+              <option value="a4-portrait">A4 縦</option>
+              <option value="a3-landscape">A3 横</option>
+              <option value="a3-portrait">A3 縦</option>
+              <option value="wide">ワイド 16:9</option>
+            </select>
+          </label>
+          <label>
+            縦強調
+            <input id="export-exaggeration" type="range" min="1" max="50" value="20" />
+          </label>
+          <output id="export-exaggeration-output" for="export-exaggeration">20</output>
+          <button id="export-elevation" type="button" disabled>断面図 PNG</button>
+          <button id="export-slope" type="button" disabled>傾斜図 PNG</button>
+        </div>
+        <div class="export-preview-grid">
+          <div class="export-preview">
+            <canvas id="export-elevation-canvas" aria-label="印刷用断面図"></canvas>
+          </div>
+          <div class="export-preview">
+            <canvas id="export-slope-canvas" aria-label="印刷用傾斜図"></canvas>
+          </div>
+        </div>
+      </section>
+
       <section class="workspace-grid">
         <div class="map-panel" aria-label="地図">
           <div id="map"></div>
