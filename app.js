@@ -525,7 +525,7 @@ function boot() {
     const size = getExportCanvasSize(paperSizeInput.value, EXPORT_BASE_WIDTH, exaggeration);
     drawElevationExport(exportElevationCanvas, latestStats, size, exaggeration);
     drawSlopeExport(exportSlopeCanvas, latestStats, size, exaggeration);
-    exportNote.textContent = `${size.label} / 縦強調 ${exaggeration}`;
+    exportNote.textContent = `${size.label} / 縦強調 ${exaggeration} / ${size.width}x${size.height}px`;
   }
 
   function drawElevationExport(canvas, stats, size, exaggeration) {
@@ -585,6 +585,7 @@ function boot() {
   function setupCanvas(canvas, size) {
     canvas.width = size.width;
     canvas.height = size.height;
+    canvas.style.aspectRatio = `${size.width} / ${size.height}`;
   }
 
   function drawWhitePage(ctx, width, height) {
