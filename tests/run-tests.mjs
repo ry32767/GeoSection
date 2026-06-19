@@ -32,6 +32,8 @@ assert.equal(needsElevation([{ lat: 1, lon: 1, elevation: null }]), true);
 assert.deepEqual(movingAverage([0, 10, 20, 30], 3), [5, 10, 20, 25]);
 assert.deepEqual(getExportCanvasSize("a4-landscape", 1600), { width: 1600, height: 1131, label: "A4 横" });
 assert.deepEqual(getExportCanvasSize("a4-portrait", 1600), { width: 1600, height: 2263, label: "A4 縦" });
+assert.deepEqual(getExportCanvasSize("a4-landscape", 1600, 6), { width: 1600, height: 339, label: "A4 横" });
+assert.deepEqual(getExportCanvasSize("a4-landscape", 1600, 120), { width: 1600, height: 6788, label: "A4 横" });
 assert.equal(getNiceTickStep(44, 12), 5);
 assert.equal(getNiceCeil(44.05, 5), 45);
 assert.deepEqual(getAutoElevationAxis(0, 900), { min: 0, max: 1000, step: 200 });

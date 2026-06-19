@@ -112,11 +112,12 @@ export function needsElevation(points) {
   return points.some((point) => point.elevation === null);
 }
 
-export function getExportCanvasSize(paperKey, width = EXPORT_BASE_WIDTH) {
+export function getExportCanvasSize(paperKey, width = EXPORT_BASE_WIDTH, exaggeration = 20) {
   const paper = PAPER_SIZES[paperKey] ?? PAPER_SIZES["a4-landscape"];
+  const factor = Math.max(0.15, Math.min(8, exaggeration / 20));
   return {
     width,
-    height: Math.round(width / paper.ratio),
+    height: Math.max(220, Math.round((width / paper.ratio) * factor)),
     label: paper.label,
   };
 }
@@ -520,8 +521,8 @@ function boot() {
 
   function renderExportCanvases() {
     if (!latestStats) return;
-    const size = getExportCanvasSize(paperSizeInput.value);
     const exaggeration = Number.parseInt(exportExaggerationInput.value, 10);
+    const size = getExportCanvasSize(paperSizeInput.value, EXPORT_BASE_WIDTH, exaggeration);
     drawElevationExport(exportElevationCanvas, latestStats, size, exaggeration);
     drawSlopeExport(exportSlopeCanvas, latestStats, size, exaggeration);
     exportNote.textContent = `${size.label} / 縦強調 ${exaggeration}`;
