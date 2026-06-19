@@ -550,7 +550,11 @@ function boot() {
     const xMax = Math.max(1, getNiceCeil(stats.totalKm, getNiceTickStep(stats.totalKm, 12)));
 
     drawWhitePage(ctx, width, height);
-    drawPlotFrame(ctx, plot, xMax, yAxis.min, yAxis.max, "水平距離 [km]", "垂直距離 [m]", yAxis.step);
+    drawPlotFrame(ctx, plot, xMax, yAxis.min, yAxis.max, "水平距離 [km]", "垂直距離 [m]", {
+      yStep: yAxis.step,
+      xLabelAlign: "left",
+      showYAxisBreak: yAxis.min > 0,
+    });
     drawLine(ctx, plot, stats.distancesKm, stats.elevations, xMax, yAxis.min, yAxis.max, "#001eff", 3);
 
     drawCenteredText(ctx, "断面図", width / 2, margin.top - 18, 18, "#000");
@@ -574,7 +578,7 @@ function boot() {
     const xMax = Math.max(1, getNiceCeil(stats.totalKm, getNiceTickStep(stats.totalKm, 12)));
 
     drawWhitePage(ctx, width, height);
-    drawPlotFrame(ctx, plot, xMax, yAxis.min, yAxis.max, "距離 [km]", "傾斜角 [度]", yAxis.step);
+    drawPlotFrame(ctx, plot, xMax, yAxis.min, yAxis.max, "距離 [km]", "傾斜角 [度]", { yStep: yAxis.step });
     const zeroY = mapValue(0, yAxis.min, yAxis.max, plot.bottom, plot.top);
     drawLineSegment(ctx, plot.left, zeroY, plot.right, zeroY, "#333", 1, [2, 3]);
     drawLine(ctx, plot, stats.distancesKm, stats.slopes, xMax, yAxis.min, yAxis.max, "#008000", 2);
@@ -598,14 +602,14 @@ function boot() {
     ctx.restore();
   }
 
-  function drawPlotFrame(ctx, plot, xMax, yMin, yMax, xLabel, yLabel, explicitYStep = null) {
+  function drawPlotFrame(ctx, plot, xMax, yMin, yMax, xLabel, yLabel, options = {}) {
     ctx.save();
     ctx.strokeStyle = "#000";
     ctx.lineWidth = 1.2;
     ctx.strokeRect(plot.left, plot.top, plot.right - plot.left, plot.bottom - plot.top);
 
     const xStep = xMax <= 60 ? 1 : Math.max(1, getNiceTickStep(xMax, 18));
-    const yStep = explicitYStep ?? getNiceTickStep(yMax - yMin, 8);
+    const yStep = options.yStep ?? getNiceTickStep(yMax - yMin, 8);
     ctx.font = "14px 'Yu Gothic', Meiryo, sans-serif";
     ctx.fillStyle = "#000";
     ctx.textAlign = "center";
@@ -626,15 +630,38 @@ function boot() {
       ctx.fillText(String(Math.round(y)), plot.left - 10, py);
     }
 
-    ctx.textAlign = "center";
+    ctx.textAlign = options.xLabelAlign === "left" ? "right" : "center";
     ctx.textBaseline = "top";
-    ctx.fillText(xLabel, (plot.left + plot.right) / 2, plot.bottom + 38);
+    ctx.fillText(xLabel, options.xLabelAlign === "left" ? plot.left - 16 : (plot.left + plot.right) / 2, plot.bottom + 38);
+    if (options.showYAxisBreak) {
+      drawYAxisBreak(ctx, plot.left, plot.bottom);
+    }
     ctx.save();
     ctx.translate(plot.left - 58, (plot.top + plot.bottom) / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textBaseline = "middle";
     ctx.fillText(yLabel, 0, 0);
     ctx.restore();
+    ctx.restore();
+  }
+
+  function drawYAxisBreak(ctx, x, y) {
+    ctx.save();
+    ctx.strokeStyle = "#000";
+    ctx.lineWidth = 2;
+    const width = 22;
+    const amplitude = 3.5;
+    for (let line = 0; line < 2; line += 1) {
+      const offsetY = y - 10 + line * 6;
+      ctx.beginPath();
+      for (let i = 0; i <= width; i += 2) {
+        const px = x - width / 2 + i;
+        const py = offsetY + Math.sin((i / width) * Math.PI * 2) * amplitude;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
