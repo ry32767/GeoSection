@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import {
   computeRouteStats,
+  estimateTextWidth,
   getAutoElevationAxis,
   getAutoSlopeAxis,
   getExportCanvasSize,
@@ -43,6 +44,11 @@ assert.equal(getNiceCeil(44.05, 5), 45);
 assert.deepEqual(getAutoElevationAxis(0, 900), { min: 0, max: 1000, step: 200 });
 assert.deepEqual(getAutoElevationAxis(780, 1040), { min: 750, max: 1100, step: 50 });
 assert.deepEqual(getAutoSlopeAxis([-4, 8, 12]), { min: -15, max: 15, step: 5 });
+
+// 文字幅の概算: 全角は font サイズ、半角は約 0.6 倍。
+assert.equal(estimateTextWidth("あ", 16), 16);
+assert.equal(estimateTextWidth("ab", 10), 12);
+assert.ok(estimateTextWidth("地点名（標高 [m]）", 16) > estimateTextWidth("植生", 16));
 
 // キリのいい縮尺分母へ切り上げる。
 assert.equal(getNiceScaleDenominator(23000), 25000);

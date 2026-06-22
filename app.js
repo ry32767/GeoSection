@@ -18,6 +18,28 @@ const PAPER_SIZES = {
 // もっとも近い値へ切り上げる（n を上げる＝グラフを少し小さくして余白に収める）。
 const NICE_SCALE_STEPS = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
 
+// 断面図の凡例テーブルの行ラベル。左側にぶら下げて描くため、作図領域の左余白幅は
+// この中で最も長いラベルが収まるように確保する。
+const ELEVATION_TABLE_ROWS = ["地点間距離 [km]", "地点名（標高 [m]）", "植生"];
+
+// canvas を使わずに文字幅をおおまかに見積もる（レイアウト計算用）。全角は font サイズ、
+// 半角は約 0.6 倍で概算する。実描画前の余白確保に使うので、やや大きめに見積もる。
+export function estimateTextWidth(text, fontSize) {
+  let width = 0;
+  for (const char of text) {
+    const code = char.codePointAt(0);
+    const isFullWidth =
+      (code >= 0x1100 && code <= 0x115f) ||
+      (code >= 0x2e80 && code <= 0xa4cf) ||
+      (code >= 0xac00 && code <= 0xd7a3) ||
+      (code >= 0xf900 && code <= 0xfaff) ||
+      (code >= 0xff00 && code <= 0xff60) ||
+      (code >= 0xffe0 && code <= 0xffe6);
+    width += isFullWidth ? fontSize : fontSize * 0.6;
+  }
+  return width;
+}
+
 export function haversineMeters(a, b) {
   const toRad = (value) => (value * Math.PI) / 180;
   const dLat = toRad(b.lat - a.lat);
@@ -759,14 +781,15 @@ function boot() {
     });
     drawLine(ctx, plot, stats.distancesKm, stats.elevations, xMax, yAxis.min, yAxis.max, options.elevationColor, layout.lineWidth);
 
-    // タイトルと縮尺情報はグラフ上のヘッダ領域に配置する（グラフ幅が細くても
-    // はみ出さないよう、用紙の中央・右端を基準にする）。
-    drawCenteredText(ctx, "断面図", width / 2, plot.top - Math.round(layout.titleFontSize * 1.9), layout.titleFontSize, "#000");
+    // タイトルと縮尺情報はグラフ上のヘッダ領域に中央寄せで配置し、用紙幅に収まらない
+    // 場合はフォントを縮めてはみ出さないようにする。
+    const headerWidth = layout.infoRight - (width - layout.infoRight);
+    drawCenteredTextFit(ctx, "断面図", width / 2, plot.top - Math.round(layout.titleFontSize * 1.9), headerWidth, layout.titleFontSize, "#000");
     const infoText =
       `水平 1：${formatScaleDenominator(layout.horizontalScale)}` +
       `　垂直 1：${formatScaleDenominator(layout.verticalScale)}` +
       `　強調比 1：${exaggeration}　総距離 ${stats.totalKm.toFixed(2)} km`;
-    drawRightText(ctx, infoText, layout.infoRight, plot.top - Math.round(layout.infoFontSize * 0.9), layout.infoFontSize, "#000");
+    drawCenteredTextFit(ctx, infoText, width / 2, plot.top - Math.round(layout.infoFontSize * 0.9), headerWidth, layout.infoFontSize, "#000");
     drawElevationTable(ctx, plot.left, layout.tableTop, plot.right - plot.left, layout.tableHeight, {
       fontSize: layout.tableFontSize,
       labelGap: layout.tableLabelGap,
@@ -822,7 +845,15 @@ function boot() {
     const scale = clamp(Math.min(width / EXPORT_BASE_WIDTH, height / 980), 0.45, 1.1);
     const pageMarginX = Math.round(width * (marginPercent / 100));
     const pageMarginY = Math.round(height * (marginPercent / 100));
-    const fullLeft = Math.max(pageMarginX + Math.round(78 * scale), Math.round(width * 0.13));
+    const tableFontSize = Math.max(9, Math.round(16 * scale));
+    const tableLabelGap = Math.max(8, Math.round(14 * scale));
+    // 行ラベルは作図枠の左側にぶら下げるため、最長ラベルが収まる左余白を必ず確保する。
+    const labelBand = Math.max(...ELEVATION_TABLE_ROWS.map((row) => estimateTextWidth(row, tableFontSize)));
+    const fullLeft = Math.max(
+      pageMarginX + Math.round(78 * scale),
+      Math.round(width * 0.13),
+      pageMarginX + Math.ceil(labelBand) + tableLabelGap + 10,
+    );
     const fullRight = width - Math.max(pageMarginX, Math.round(width * 0.045));
     // タイトル + 縮尺情報の 2 行ぶんを確保したヘッダ領域を上に取る。
     const top = Math.max(pageMarginY + Math.round(56 * scale), Math.round(64 * scale));
@@ -863,8 +894,8 @@ function boot() {
       labelFontSize: Math.max(10, Math.round(14 * scale)),
       titleFontSize: Math.max(13, Math.round(20 * scale)),
       infoFontSize: Math.max(10, Math.round(15 * scale)),
-      tableFontSize: Math.max(9, Math.round(16 * scale)),
-      tableLabelGap: Math.max(8, Math.round(14 * scale)),
+      tableFontSize,
+      tableLabelGap,
       xTickOffset: Math.max(5, Math.round(8 * scale)),
       xLabelOffset: Math.max(22, Math.round(34 * scale)),
       yLabelOffset: Math.max(38, Math.round(58 * scale)),
@@ -924,10 +955,10 @@ function boot() {
     ctx.save();
     ctx.strokeStyle = "#000";
     ctx.lineWidth = 1.2;
-    ctx.strokeRect(plot.left, plot.top, plot.right - plot.left, plot.bottom - plot.top);
+    const plotWidth = plot.right - plot.left;
+    const plotHeight = plot.bottom - plot.top;
+    ctx.strokeRect(plot.left, plot.top, plotWidth, plotHeight);
 
-    const xStep = xMax <= 60 ? 1 : Math.max(1, getNiceTickStep(xMax, 18));
-    const yStep = options.yStep ?? getNiceTickStep(yMax - yMin, 8);
     const tickFontSize = options.tickFontSize ?? 14;
     const labelFontSize = options.labelFontSize ?? 14;
     const xTickOffset = options.xTickOffset ?? 8;
@@ -935,9 +966,21 @@ function boot() {
     const yLabelOffset = options.yLabelOffset ?? 58;
     ctx.font = `${tickFontSize}px 'Yu Gothic', Meiryo, sans-serif`;
     ctx.fillStyle = "#000";
+
+    // X 軸の目盛り間隔は作図幅に合わせて決め、ラベルの重なり・はみ出しを防ぐ。
+    // ラベルは整数 km なので刻みも 1 以上の整数に丸める。
+    const xLabelWidth = Math.max(ctx.measureText(String(Math.round(xMax))).width, ctx.measureText("0").width);
+    const xTickTargets = clamp(Math.floor(plotWidth / (xLabelWidth + 16)), 2, 20);
+    const xStep = Math.max(1, Math.round(getNiceTickStep(xMax, xTickTargets)));
+
+    // Y 軸も作図高に合わせ、キリのいい刻みの整数倍へ間引いて重なりを防ぐ。
+    const baseYStep = options.yStep ?? getNiceTickStep(yMax - yMin, 8);
+    const maxYTicks = Math.max(2, Math.floor(plotHeight / (tickFontSize * 1.7)));
+    const yMultiple = Math.max(1, Math.ceil((yMax - yMin) / baseYStep / maxYTicks));
+    const yStep = baseYStep * yMultiple;
+
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-
     for (let x = 0; x <= xMax + 0.0001; x += xStep) {
       const px = mapValue(x, 0, xMax, plot.left, plot.right);
       drawLineSegment(ctx, px, plot.top, px, plot.bottom, "#b7b7b7", 1);
@@ -961,6 +1004,11 @@ function boot() {
     ctx.translate(plot.left - yLabelOffset, (plot.top + plot.bottom) / 2);
     ctx.rotate(-Math.PI / 2);
     ctx.textBaseline = "middle";
+    // 縦軸タイトルが作図高を超える場合は縮めて枠外へはみ出さないようにする。
+    const yTitleWidth = ctx.measureText(yLabel).width;
+    if (yTitleWidth > plotHeight - 8) {
+      ctx.font = `${Math.max(8, Math.floor(labelFontSize * ((plotHeight - 8) / yTitleWidth)))}px 'Yu Gothic', Meiryo, sans-serif`;
+    }
     ctx.fillText(yLabel, 0, 0);
     ctx.restore();
     if (options.showYAxisBreak) {
@@ -1011,7 +1059,8 @@ function boot() {
   }
 
   function drawElevationTable(ctx, left, top, width, height, options = {}) {
-    const rows = ["地点間距離 [km]", "地点名（標高 [m]）", "植生"];
+    const rows = ELEVATION_TABLE_ROWS;
+    const labelGap = options.labelGap ?? 14;
     ctx.save();
     ctx.strokeStyle = "#000";
     ctx.lineWidth = 1.2;
@@ -1021,13 +1070,39 @@ function boot() {
       drawLineSegment(ctx, left, y, left + width, y, "#000", 1.2);
     }
     ctx.fillStyle = "#000";
-    ctx.font = `${options.fontSize ?? 16}px 'Yu Gothic', Meiryo, sans-serif`;
+    // ラベルは枠の左側にぶら下げる。左余白に収まらなければフォントを縮めて
+    // 用紙の左端からはみ出さないようにする（安全策）。
+    let fontSize = options.fontSize ?? 16;
+    const available = left - labelGap - 4;
+    ctx.font = `${fontSize}px 'Yu Gothic', Meiryo, sans-serif`;
+    const widest = Math.max(...rows.map((row) => ctx.measureText(row).width));
+    if (widest > available && widest > 0) {
+      fontSize = Math.max(8, Math.floor(fontSize * (available / widest)));
+      ctx.font = `${fontSize}px 'Yu Gothic', Meiryo, sans-serif`;
+    }
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
     rows.forEach((label, index) => {
       const y = top + (height / rows.length) * (index + 0.5);
-      ctx.fillText(label, left - (options.labelGap ?? 14), y);
+      ctx.fillText(label, left - labelGap, y);
     });
+    ctx.restore();
+  }
+
+  // 中央寄せで描くが、maxWidth に収まらなければフォントを縮めてはみ出しを防ぐ。
+  function drawCenteredTextFit(ctx, text, x, y, maxWidth, size, color) {
+    ctx.save();
+    ctx.fillStyle = color;
+    let fontSize = size;
+    ctx.font = `${fontSize}px 'Yu Gothic', Meiryo, sans-serif`;
+    const measured = ctx.measureText(text).width;
+    if (measured > maxWidth && measured > 0) {
+      fontSize = Math.max(8, Math.floor(fontSize * (maxWidth / measured)));
+      ctx.font = `${fontSize}px 'Yu Gothic', Meiryo, sans-serif`;
+    }
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x, y);
     ctx.restore();
   }
 
@@ -1048,16 +1123,6 @@ function boot() {
     ctx.fillStyle = color;
     ctx.font = `${size}px 'Yu Gothic', Meiryo, sans-serif`;
     ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, x, y);
-    ctx.restore();
-  }
-
-  function drawRightText(ctx, text, x, y, size, color) {
-    ctx.save();
-    ctx.fillStyle = color;
-    ctx.font = `${size}px 'Yu Gothic', Meiryo, sans-serif`;
-    ctx.textAlign = "right";
     ctx.textBaseline = "middle";
     ctx.fillText(text, x, y);
     ctx.restore();
