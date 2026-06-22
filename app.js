@@ -232,9 +232,11 @@ export function getAutoElevationAxis(minElevation, maxElevation) {
   const maxValue = Number.isFinite(maxElevation) ? maxElevation : 1;
   const range = Math.max(1, maxValue - minValue);
   const padding = Math.max(10, range * 0.08);
+  // 上側は広めに余白を取り、グラフ右上の情報枠と標高線が重ならないようにする。
+  const topPadding = Math.max(40, range * 0.25);
   const shouldStartAtZero = minValue <= 120 || range > maxValue * 0.55;
   const roughMin = shouldStartAtZero ? 0 : minValue - padding;
-  const roughMax = maxValue + padding;
+  const roughMax = maxValue + topPadding;
   const step = getNiceTickStep(Math.max(1, roughMax - roughMin), 7);
   const min = shouldStartAtZero ? 0 : getNiceFloor(roughMin, step);
   const max = Math.max(step, getNiceCeil(roughMax, step));

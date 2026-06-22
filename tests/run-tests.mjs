@@ -41,8 +41,8 @@ assert.deepEqual(getExportCanvasSize("a4-landscape", 1600, 6), { width: 1600, he
 assert.deepEqual(getExportCanvasSize("a4-landscape", 1600, 50), { width: 1600, height: 1131, label: "A4 横" });
 assert.equal(getNiceTickStep(44, 12), 5);
 assert.equal(getNiceCeil(44.05, 5), 45);
-assert.deepEqual(getAutoElevationAxis(0, 900), { min: 0, max: 1000, step: 200 });
-assert.deepEqual(getAutoElevationAxis(780, 1040), { min: 750, max: 1100, step: 50 });
+assert.deepEqual(getAutoElevationAxis(0, 900), { min: 0, max: 1200, step: 200 });
+assert.deepEqual(getAutoElevationAxis(780, 1040), { min: 750, max: 1150, step: 50 });
 assert.deepEqual(getAutoSlopeAxis([-4, 8, 12]), { min: -15, max: 15, step: 5 });
 
 // 文字幅の概算: 全角は font サイズ、半角は約 0.6 倍。
