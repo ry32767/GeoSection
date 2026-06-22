@@ -778,6 +778,8 @@ function boot() {
       xTickOffset: layout.xTickOffset,
       xLabelOffset: layout.xLabelOffset,
       yLabelOffset: layout.yLabelOffset,
+      // X 軸ラベルと表の行見出しの右端を揃えるため、同じ gap を使う。
+      xLabelGap: layout.tableLabelGap,
     });
     drawLine(ctx, plot, stats.distancesKm, stats.elevations, xMax, yAxis.min, yAxis.max, options.elevationColor, layout.lineWidth);
 
@@ -999,7 +1001,10 @@ function boot() {
     ctx.textAlign = options.xLabelAlign === "left" ? "right" : "center";
     ctx.textBaseline = "top";
     ctx.font = `${labelFontSize}px 'Yu Gothic', Meiryo, sans-serif`;
-    ctx.fillText(xLabel, options.xLabelAlign === "left" ? plot.left - 16 : (plot.left + plot.right) / 2, plot.bottom + xLabelOffset);
+    // 左寄せの X 軸ラベルは、下の表の行見出しと右端を揃える（同じ left からの
+    // gap を使うので、縦横比が変わっても縦に綺麗に並ぶ）。
+    const leftLabelGap = options.xLabelGap ?? 16;
+    ctx.fillText(xLabel, options.xLabelAlign === "left" ? plot.left - leftLabelGap : (plot.left + plot.right) / 2, plot.bottom + xLabelOffset);
     ctx.save();
     ctx.translate(plot.left - yLabelOffset, (plot.top + plot.bottom) / 2);
     ctx.rotate(-Math.PI / 2);
@@ -1012,7 +1017,8 @@ function boot() {
     ctx.fillText(yLabel, 0, 0);
     ctx.restore();
     if (options.showYAxisBreak) {
-      drawYAxisBreak(ctx, plot.left + 10, plot.bottom - 4);
+      // 省略記号は Y 軸線（plot.left）上に重ねて配置する。
+      drawYAxisBreak(ctx, plot.left, plot.bottom - 4);
     }
     ctx.restore();
   }
