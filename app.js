@@ -3,13 +3,20 @@ const DEFAULT_BATCH_SIZE = 80;
 const EXPORT_BASE_WIDTH = 1600;
 const DEFAULT_ELEVATION_COLOR = "#001eff";
 const DEFAULT_SLOPE_COLOR = "#008000";
+// widthMm は印刷時の用紙の実寸（長辺/短辺）。1/n 縮尺はこの実寸とグラフの
+// 描画幅から計算する。height は ratio から決まるため、mm/px は縦横で一致する。
 const PAPER_SIZES = {
-  "a4-landscape": { ratio: 297 / 210, label: "A4 横" },
-  "a4-portrait": { ratio: 210 / 297, label: "A4 縦" },
-  "a3-landscape": { ratio: 420 / 297, label: "A3 横" },
-  "a3-portrait": { ratio: 297 / 420, label: "A3 縦" },
-  wide: { ratio: 16 / 9, label: "ワイド 16:9" },
+  "a4-landscape": { ratio: 297 / 210, widthMm: 297, label: "A4 横" },
+  "a4-portrait": { ratio: 210 / 297, widthMm: 210, label: "A4 縦" },
+  "a3-landscape": { ratio: 420 / 297, widthMm: 420, label: "A3 横" },
+  "a3-portrait": { ratio: 297 / 420, widthMm: 297, label: "A3 縦" },
+  // ワイドは規格紙ではないが、長辺を 297mm とみなして 1/n を算出する。
+  wide: { ratio: 16 / 9, widthMm: 297, label: "ワイド 16:9" },
 };
+
+// 地形図のような「キリのいい」縮尺分母（1/n の n）の候補。実際に必要な n 以上で
+// もっとも近い値へ切り上げる（n を上げる＝グラフを少し小さくして余白に収める）。
+const NICE_SCALE_STEPS = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10];
 
 export function haversineMeters(a, b) {
   const toRad = (value) => (value * Math.PI) / 180;
@@ -149,6 +156,53 @@ export function getNiceFloor(value, step) {
 
 export function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+// 必要な縮尺分母 value 以上で、もっともキリのいい n（例: 25000, 50000）へ切り上げる。
+export function getNiceScaleDenominator(value) {
+  if (!Number.isFinite(value) || value <= 0) return 1;
+  const magnitude = 10 ** Math.floor(Math.log10(value));
+  const normalized = value / magnitude;
+  for (const step of NICE_SCALE_STEPS) {
+    if (normalized <= step + 1e-9) return Math.round(step * magnitude);
+  }
+  return Math.round(10 * magnitude);
+}
+
+// 断面図の作図寸法と縮尺を求める。
+//
+// 強調比 exaggeration は「縦の縮尺 ÷ 横の縮尺」（= x 軸と y 軸の比率）と定義する。
+// 横の実距離 xMaxKm[km] と縦の実標高差 yRangeM[m] を実寸（mm/px）に投影したとき、
+//   exaggeration = (plotHeight / yRange) / (plotWidth / xRange)
+// が常に成り立つよう plotHeight/plotWidth を決めるので、用紙サイズが変わっても
+// 強調比（縦横比）は変化しない。
+//
+// さらに横の縮尺分母 n を「キリのいい」値へ切り上げ、その n からグラフ幅を逆算する
+// ことで、地形図のような 1/n を保ったまま用紙内に収める。
+export function getSectionScale({
+  paperWidthMm,
+  canvasWidthPx,
+  maxPlotWidthPx,
+  maxPlotHeightPx,
+  xMaxKm,
+  yRangeM,
+  exaggeration,
+}) {
+  const mmPerPx = paperWidthMm / canvasWidthPx;
+  const xMaxM = Math.max(1e-6, xMaxKm * 1000);
+  const yRange = Math.max(1e-6, yRangeM);
+  // plotHeight / plotWidth。強調比を満たすための縦横比。
+  const heightPerWidth = (exaggeration * yRange) / xMaxM;
+  // 用紙の幅・高さの両方に収まる最大のグラフ幅。
+  const widthFromHeight = heightPerWidth > 0 ? maxPlotHeightPx / heightPerWidth : maxPlotWidthPx;
+  const baseWidth = Math.max(1, Math.min(maxPlotWidthPx, widthFromHeight));
+  // baseWidth をそのまま使ったときの横縮尺分母。これ以上の n ならグラフは収まる。
+  const idealDenominator = (xMaxKm * 1e6) / (baseWidth * mmPerPx);
+  const horizontalScale = getNiceScaleDenominator(idealDenominator);
+  const plotWidth = (xMaxKm * 1e6) / (horizontalScale * mmPerPx);
+  const plotHeight = plotWidth * heightPerWidth;
+  const verticalScale = horizontalScale / exaggeration;
+  return { plotWidth, plotHeight, mmPerPx, horizontalScale, verticalScale };
 }
 
 export function getAutoElevationAxis(minElevation, maxElevation) {
@@ -332,7 +386,7 @@ function boot() {
   });
 
   exportExaggerationInput.addEventListener("input", () => {
-    exportExaggerationOutput.value = exportExaggerationInput.value;
+    exportExaggerationOutput.value = `1：${exportExaggerationInput.value}`;
     if (latestStats) renderExportCanvases();
   });
 
@@ -667,13 +721,15 @@ function boot() {
 
   function renderExportCanvases() {
     if (!latestStats) return;
-    const exaggeration = Number.parseInt(exportExaggerationInput.value, 10);
+    const exaggeration = Number.parseFloat(exportExaggerationInput.value) || 1;
     const size = getExportCanvasSize(paperSizeInput.value, EXPORT_BASE_WIDTH);
     const options = getExportOptions();
     applyPreviewScale();
-    drawElevationExport(exportElevationCanvas, latestStats, size, exaggeration, options);
-    drawSlopeExport(exportSlopeCanvas, latestStats, size, exaggeration, options);
-    exportNote.textContent = `${size.label} / 縦強調 ${exaggeration} / ${size.width}x${size.height}px`;
+    const scaleInfo = drawElevationExport(exportElevationCanvas, latestStats, size, exaggeration, options);
+    drawSlopeExport(exportSlopeCanvas, latestStats, size, options);
+    exportNote.textContent =
+      `${size.label} / 強調比 1：${exaggeration} / 横縮尺 1：${formatScaleDenominator(scaleInfo.horizontalScale)}` +
+      ` / 縦縮尺 1：${formatScaleDenominator(scaleInfo.verticalScale)}`;
   }
 
   function drawElevationExport(canvas, stats, size, exaggeration, options) {
@@ -681,11 +737,14 @@ function boot() {
     const ctx = canvas.getContext("2d");
     const width = canvas.width;
     const height = canvas.height;
-    const layout = getElevationExportLayout(width, height, options.marginPercent, exaggeration);
-    const { plot } = layout;
-    const margin = { top: plot.top };
     const yAxis = getAutoElevationAxis(stats.minElevation, stats.maxElevation);
     const xMax = Math.max(1, getNiceCeil(stats.totalKm, getNiceTickStep(stats.totalKm, 12)));
+    const layout = getElevationExportLayout(width, height, options.marginPercent, exaggeration, {
+      paperWidthMm: options.paperWidthMm,
+      xMaxKm: xMax,
+      yRangeM: yAxis.max - yAxis.min,
+    });
+    const { plot } = layout;
 
     drawWhitePage(ctx, width, height);
     drawPlotFrame(ctx, plot, xMax, yAxis.min, yAxis.max, "水平距離 [km]", "垂直距離 [m]", {
@@ -700,21 +759,27 @@ function boot() {
     });
     drawLine(ctx, plot, stats.distancesKm, stats.elevations, xMax, yAxis.min, yAxis.max, options.elevationColor, layout.lineWidth);
 
-    drawCenteredText(ctx, "断面図", width / 2, margin.top - 18, 18, "#000");
-    drawRightText(ctx, `水平：垂直 = 1：${exaggeration}`, plot.right - 12, plot.top + 22, 18, "#000");
-    drawRightText(ctx, `総距離: ${stats.totalKm.toFixed(2)} km`, plot.right - 12, plot.top + 52, 18, "#000");
+    // タイトルと縮尺情報はグラフ上のヘッダ領域に配置する（グラフ幅が細くても
+    // はみ出さないよう、用紙の中央・右端を基準にする）。
+    drawCenteredText(ctx, "断面図", width / 2, plot.top - Math.round(layout.titleFontSize * 1.9), layout.titleFontSize, "#000");
+    const infoText =
+      `水平 1：${formatScaleDenominator(layout.horizontalScale)}` +
+      `　垂直 1：${formatScaleDenominator(layout.verticalScale)}` +
+      `　強調比 1：${exaggeration}　総距離 ${stats.totalKm.toFixed(2)} km`;
+    drawRightText(ctx, infoText, layout.infoRight, plot.top - Math.round(layout.infoFontSize * 0.9), layout.infoFontSize, "#000");
     drawElevationTable(ctx, plot.left, layout.tableTop, plot.right - plot.left, layout.tableHeight, {
       fontSize: layout.tableFontSize,
       labelGap: layout.tableLabelGap,
     });
+    return { horizontalScale: layout.horizontalScale, verticalScale: layout.verticalScale };
   }
 
-  function drawSlopeExport(canvas, stats, size, exaggeration, options) {
+  function drawSlopeExport(canvas, stats, size, options) {
     setupCanvas(canvas, size);
     const ctx = canvas.getContext("2d");
     const width = canvas.width;
     const height = canvas.height;
-    const layout = getSlopeExportLayout(width, height, options.marginPercent, exaggeration);
+    const layout = getSlopeExportLayout(width, height, options.marginPercent);
     const { plot } = layout;
     const yAxis = getAutoSlopeAxis(stats.slopes);
     const xMax = Math.max(1, getNiceCeil(stats.totalKm, getNiceTickStep(stats.totalKm, 12)));
@@ -725,14 +790,20 @@ function boot() {
     drawLineSegment(ctx, plot.left, zeroY, plot.right, zeroY, "#333", 1, [2, 3]);
     drawLine(ctx, plot, stats.distancesKm, stats.slopes, xMax, yAxis.min, yAxis.max, options.slopeColor, layout.lineWidth);
     drawCenteredText(ctx, "傾斜角", width / 2, plot.top - 18, 18, "#000");
-    drawRightText(ctx, `強調度： ${exaggeration}`, plot.right - 18, plot.top + 28, 18, "#000");
+  }
+
+  function formatScaleDenominator(value) {
+    if (!Number.isFinite(value) || value <= 0) return "-";
+    return Math.round(value).toLocaleString("en-US");
   }
 
   function getExportOptions() {
+    const paper = PAPER_SIZES[paperSizeInput.value] ?? PAPER_SIZES["a4-landscape"];
     return {
       elevationColor: elevationColorInput.value || DEFAULT_ELEVATION_COLOR,
       slopeColor: slopeColorInput.value || DEFAULT_SLOPE_COLOR,
       marginPercent: clamp(Number.parseInt(pageMarginInput.value, 10) || 8, 4, 16),
+      paperWidthMm: paper.widthMm,
     };
   }
 
@@ -747,84 +818,73 @@ function boot() {
     document.documentElement.style.setProperty("--paper-preview-scale", `${previewScaleInput.value}%`);
   }
 
-  function getElevationExportLayout(width, height, marginPercent, exaggeration = 20) {
+  function getElevationExportLayout(width, height, marginPercent, exaggeration, scaleInput) {
     const scale = clamp(Math.min(width / EXPORT_BASE_WIDTH, height / 980), 0.45, 1.1);
     const pageMarginX = Math.round(width * (marginPercent / 100));
     const pageMarginY = Math.round(height * (marginPercent / 100));
     const fullLeft = Math.max(pageMarginX + Math.round(78 * scale), Math.round(width * 0.13));
     const fullRight = width - Math.max(pageMarginX, Math.round(width * 0.045));
-    const top = Math.max(pageMarginY + Math.round(28 * scale), Math.round(36 * scale));
+    // タイトル + 縮尺情報の 2 行ぶんを確保したヘッダ領域を上に取る。
+    const top = Math.max(pageMarginY + Math.round(56 * scale), Math.round(64 * scale));
     const bottomPad = Math.max(pageMarginY, Math.round(16 * scale));
     const minPlotHeight = Math.max(76, Math.round(120 * scale));
-    // The paper size is fixed; the exaggeration only reshapes the graph inside
-    // the page. Up to 20 it stretches the content height (top-anchored, white
-    // margin below). Beyond 20 the height is already maxed out, so it instead
-    // narrows the content width (centered, white margin on the sides) to keep
-    // raising the vertical-to-horizontal ratio.
-    const ratio = exaggeration / 20;
-    const vScale = clamp(Math.min(ratio, 1), 0.2, 1);
-    const hScale = ratio > 1 ? 1 / ratio : 1;
-    const plotWidth = Math.max(Math.round(width * 0.18), Math.round((fullRight - fullLeft) * hScale));
-    const centerX = Math.round((fullLeft + fullRight) / 2);
-    const left = centerX - Math.round(plotWidth / 2);
-    const right = left + plotWidth;
-    const minContent = top + bottomPad + minPlotHeight + Math.round(140 * scale);
-    const contentHeight = Math.min(height, Math.max(minContent, Math.round(height * vScale)));
-    let tableHeight = clamp(Math.round(contentHeight * 0.14), Math.round(44 * scale), Math.round(92 * scale));
-    let xLabelBand = Math.max(Math.round(46 * scale), 30);
-    let tableTop = contentHeight - bottomPad - tableHeight;
-    let plotBottom = tableTop - xLabelBand;
+    const minPlotWidth = Math.max(Math.round(width * 0.16), 160);
+    const tableHeight = clamp(Math.round(height * 0.12), Math.round(44 * scale), Math.round(110 * scale));
+    const xLabelBand = Math.max(Math.round(46 * scale), 30);
+    const maxPlotWidth = fullRight - fullLeft;
+    const maxPlotHeight = Math.max(minPlotHeight, height - bottomPad - tableHeight - xLabelBand - top);
 
-    if (plotBottom - top < minPlotHeight) {
-      const available = Math.max(86, contentHeight - top - bottomPad - minPlotHeight);
-      tableHeight = clamp(Math.round(available * 0.48), 34, 76);
-      xLabelBand = clamp(available - tableHeight, 28, 54);
-      tableTop = contentHeight - bottomPad - tableHeight;
-      plotBottom = Math.max(top + minPlotHeight, tableTop - xLabelBand);
-    }
+    // 用紙サイズに依らず強調比（縦横比）を一定に保ち、横縮尺 n をキリよく丸める。
+    const { plotWidth, plotHeight, horizontalScale, verticalScale } = getSectionScale({
+      paperWidthMm: scaleInput.paperWidthMm,
+      canvasWidthPx: width,
+      maxPlotWidthPx: maxPlotWidth,
+      maxPlotHeightPx: maxPlotHeight,
+      xMaxKm: scaleInput.xMaxKm,
+      yRangeM: scaleInput.yRangeM,
+      exaggeration,
+    });
+    const drawWidth = clamp(Math.round(plotWidth), minPlotWidth, maxPlotWidth);
+    const drawHeight = clamp(Math.round(plotHeight), minPlotHeight, maxPlotHeight);
+    const centerX = Math.round((fullLeft + fullRight) / 2);
+    const left = centerX - Math.round(drawWidth / 2);
+    const right = left + drawWidth;
+    const plotBottom = top + drawHeight;
+    const tableTop = plotBottom + xLabelBand;
 
     return {
       plot: { left, top, right, bottom: plotBottom },
-      tableTop: Math.max(plotBottom + xLabelBand, tableTop),
+      tableTop,
       tableHeight,
+      infoRight: fullRight,
+      horizontalScale,
+      verticalScale,
       tickFontSize: Math.max(9, Math.round(14 * scale)),
       labelFontSize: Math.max(10, Math.round(14 * scale)),
-      titleFontSize: Math.max(11, Math.round(18 * scale)),
-      infoFontSize: Math.max(10, Math.round(18 * scale)),
+      titleFontSize: Math.max(13, Math.round(20 * scale)),
+      infoFontSize: Math.max(10, Math.round(15 * scale)),
       tableFontSize: Math.max(9, Math.round(16 * scale)),
       tableLabelGap: Math.max(8, Math.round(14 * scale)),
       xTickOffset: Math.max(5, Math.round(8 * scale)),
       xLabelOffset: Math.max(22, Math.round(34 * scale)),
       yLabelOffset: Math.max(38, Math.round(58 * scale)),
       lineWidth: Math.max(1.5, Math.round(3 * scale * 10) / 10),
-      infoLine1: Math.max(16, Math.round(22 * scale)),
-      infoLine2: Math.max(34, Math.round(52 * scale)),
     };
   }
 
-  function getSlopeExportLayout(width, height, marginPercent, exaggeration = 20) {
+  function getSlopeExportLayout(width, height, marginPercent) {
     const scale = clamp(Math.min(width / EXPORT_BASE_WIDTH, height / 820), 0.48, 1.1);
     const pageMarginX = Math.round(width * (marginPercent / 100));
     const pageMarginY = Math.round(height * (marginPercent / 100));
-    const fullLeft = Math.max(pageMarginX + Math.round(58 * scale), Math.round(width * 0.11));
-    const fullRight = width - Math.max(pageMarginX, Math.round(width * 0.045));
+    // 傾斜図の縦軸は「角度（度）」で長さではないため、強調比（長さの比率）は
+    // 適用しない。用紙の縦横比に合わせて作図領域いっぱいに描く。
+    const left = Math.max(pageMarginX + Math.round(58 * scale), Math.round(width * 0.11));
+    const right = width - Math.max(pageMarginX, Math.round(width * 0.045));
     const top = Math.max(pageMarginY + Math.round(32 * scale), Math.round(52 * scale));
-    // Same fixed-paper rule as the elevation chart: up to 20 stretches the
-    // content height, beyond 20 narrows the content width (centered) so the
-    // exaggeration keeps increasing without resizing the page.
-    const ratio = exaggeration / 20;
-    const vScale = clamp(Math.min(ratio, 1), 0.2, 1);
-    const hScale = ratio > 1 ? 1 / ratio : 1;
-    const plotWidth = Math.max(Math.round(width * 0.18), Math.round((fullRight - fullLeft) * hScale));
-    const centerX = Math.round((fullLeft + fullRight) / 2);
-    const left = centerX - Math.round(plotWidth / 2);
-    const right = left + plotWidth;
     const bottomGap = Math.max(pageMarginY + Math.round(44 * scale), Math.round(70 * scale));
-    const minContent = top + Math.round(110 * scale) + bottomGap;
-    const contentHeight = Math.min(height, Math.max(minContent, Math.round(height * vScale)));
-    const bottom = Math.max(top + Math.round(110 * scale), contentHeight - bottomGap);
+    const bottom = Math.max(top + Math.round(110 * scale), height - bottomGap);
     return {
-      plot: { left, top, right, bottom: Math.min(bottom, contentHeight - Math.max(36, pageMarginY)) },
+      plot: { left, top, right, bottom },
       tickFontSize: Math.max(9, Math.round(14 * scale)),
       labelFontSize: Math.max(10, Math.round(14 * scale)),
       titleFontSize: Math.max(11, Math.round(18 * scale)),
@@ -833,7 +893,6 @@ function boot() {
       xLabelOffset: Math.max(22, Math.round(34 * scale)),
       yLabelOffset: Math.max(38, Math.round(58 * scale)),
       lineWidth: Math.max(1.2, Math.round(2 * scale * 10) / 10),
-      infoLine1: Math.max(18, Math.round(28 * scale)),
     };
   }
 
@@ -1059,7 +1118,9 @@ if (typeof window !== "undefined" && typeof document !== "undefined") {
     getAutoSlopeAxis,
     getExportCanvasSize,
     getNiceCeil,
+    getNiceScaleDenominator,
     getNiceTickStep,
+    getSectionScale,
     haversineMeters,
     movingAverage,
     needsElevation,
