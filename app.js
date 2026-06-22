@@ -783,15 +783,16 @@ function boot() {
     });
     drawLine(ctx, plot, stats.distancesKm, stats.elevations, xMax, yAxis.min, yAxis.max, options.elevationColor, layout.lineWidth);
 
-    // タイトルと縮尺情報はグラフ上のヘッダ領域に中央寄せで配置し、用紙幅に収まらない
-    // 場合はフォントを縮めてはみ出さないようにする。
+    // タイトルはグラフ上のヘッダに中央寄せ。縮尺・強調比などはグラフ内の右上に
+    // まとめて配置し、作図領域に合わせてサイズを自動調整する。
     const headerWidth = layout.infoRight - (width - layout.infoRight);
-    drawCenteredTextFit(ctx, "断面図", width / 2, plot.top - Math.round(layout.titleFontSize * 1.9), headerWidth, layout.titleFontSize, "#000");
-    const infoText =
-      `水平 1：${formatScaleDenominator(layout.horizontalScale)}` +
-      `　垂直 1：${formatScaleDenominator(layout.verticalScale)}` +
-      `　強調比 1：${exaggeration}　総距離 ${stats.totalKm.toFixed(2)} km`;
-    drawCenteredTextFit(ctx, infoText, width / 2, plot.top - Math.round(layout.infoFontSize * 0.9), headerWidth, layout.infoFontSize, "#000");
+    drawCenteredTextFit(ctx, "断面図", width / 2, plot.top - Math.round(layout.titleFontSize * 1.3), headerWidth, layout.titleFontSize, "#000");
+    drawPlotInfoBox(ctx, plot, [
+      `強調比 1：${exaggeration}`,
+      `水平 1：${formatScaleDenominator(layout.horizontalScale)}`,
+      `垂直 1：${formatScaleDenominator(layout.verticalScale)}`,
+      `総距離 ${stats.totalKm.toFixed(2)} km`,
+    ], layout.infoFontSize);
     drawElevationTable(ctx, plot.left, layout.tableTop, plot.right - plot.left, layout.tableHeight, {
       fontSize: layout.tableFontSize,
       labelGap: layout.tableLabelGap,
@@ -857,8 +858,8 @@ function boot() {
       pageMarginX + Math.ceil(labelBand) + tableLabelGap + 10,
     );
     const fullRight = width - Math.max(pageMarginX, Math.round(width * 0.045));
-    // タイトル + 縮尺情報の 2 行ぶんを確保したヘッダ領域を上に取る。
-    const top = Math.max(pageMarginY + Math.round(56 * scale), Math.round(64 * scale));
+    // ヘッダはタイトル 1 行ぶんのみ確保する（縮尺・強調比はグラフ内右上へ移動）。
+    const top = Math.max(pageMarginY + Math.round(40 * scale), Math.round(46 * scale));
     const bottomPad = Math.max(pageMarginY, Math.round(16 * scale));
     const minPlotHeight = Math.max(76, Math.round(120 * scale));
     const minPlotWidth = Math.max(Math.round(width * 0.16), 160);
@@ -895,7 +896,7 @@ function boot() {
       tickFontSize: Math.max(9, Math.round(14 * scale)),
       labelFontSize: Math.max(10, Math.round(14 * scale)),
       titleFontSize: Math.max(13, Math.round(20 * scale)),
-      infoFontSize: Math.max(10, Math.round(15 * scale)),
+      infoFontSize: Math.max(11, Math.round(17 * scale)),
       tableFontSize,
       tableLabelGap,
       xTickOffset: Math.max(5, Math.round(8 * scale)),
@@ -1091,6 +1092,48 @@ function boot() {
     rows.forEach((label, index) => {
       const y = top + (height / rows.length) * (index + 0.5);
       ctx.fillText(label, left - labelGap, y);
+    });
+    ctx.restore();
+  }
+
+  // グラフ内の右上に複数行の情報（縮尺・強調比など）を白背景の枠付きで描く。
+  // 作図領域の幅・高さに収まるようフォントサイズを自動調整する。
+  function drawPlotInfoBox(ctx, plot, lines, baseSize) {
+    if (!lines.length) return;
+    const plotWidth = plot.right - plot.left;
+    const plotHeight = plot.bottom - plot.top;
+    ctx.save();
+    // 高さ・幅の両方に収まる最大のフォントサイズを求める。
+    // boxHeight(size) ≈ size * (2*0.5 + (N-1)*1.45 + 1) = size * (2 + 1.45(N-1))
+    const heightFactor = 2 + 1.45 * (lines.length - 1);
+    let size = Math.min(baseSize, Math.floor((plotHeight * 0.6) / heightFactor));
+    size = Math.max(8, size);
+    ctx.font = `${size}px 'Yu Gothic', Meiryo, sans-serif`;
+    let maxLineWidth = Math.max(...lines.map((line) => ctx.measureText(line).width));
+    const limitWidth = plotWidth * 0.55;
+    if (maxLineWidth > limitWidth && maxLineWidth > 0) {
+      size = Math.max(8, Math.floor(size * (limitWidth / maxLineWidth)));
+      ctx.font = `${size}px 'Yu Gothic', Meiryo, sans-serif`;
+      maxLineWidth = Math.max(...lines.map((line) => ctx.measureText(line).width));
+    }
+    const innerPad = Math.round(size * 0.5);
+    const lineHeight = Math.round(size * 1.45);
+    const boxWidth = maxLineWidth + innerPad * 2;
+    const boxHeight = innerPad * 2 + (lines.length - 1) * lineHeight + size;
+    const margin = Math.max(4, Math.round(size * 0.5));
+    const boxRight = plot.right - margin;
+    const boxLeft = boxRight - boxWidth;
+    const boxTop = plot.top + margin;
+    ctx.fillStyle = "rgba(255, 255, 255, 0.86)";
+    ctx.strokeStyle = "rgba(0, 0, 0, 0.4)";
+    ctx.lineWidth = 1;
+    ctx.fillRect(boxLeft, boxTop, boxWidth, boxHeight);
+    ctx.strokeRect(boxLeft, boxTop, boxWidth, boxHeight);
+    ctx.fillStyle = "#000";
+    ctx.textAlign = "right";
+    ctx.textBaseline = "top";
+    lines.forEach((line, index) => {
+      ctx.fillText(line, boxRight - innerPad, boxTop + innerPad + index * lineHeight);
     });
     ctx.restore();
   }
