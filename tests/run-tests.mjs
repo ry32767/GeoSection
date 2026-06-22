@@ -6,7 +6,9 @@ import {
   getAutoSlopeAxis,
   getExportCanvasSize,
   getNiceCeil,
+  getNiceScaleDenominator,
   getNiceTickStep,
+  getSectionScale,
   haversineMeters,
   movingAverage,
   needsElevation,
@@ -41,6 +43,45 @@ assert.equal(getNiceCeil(44.05, 5), 45);
 assert.deepEqual(getAutoElevationAxis(0, 900), { min: 0, max: 1000, step: 200 });
 assert.deepEqual(getAutoElevationAxis(780, 1040), { min: 750, max: 1100, step: 50 });
 assert.deepEqual(getAutoSlopeAxis([-4, 8, 12]), { min: -15, max: 15, step: 5 });
+
+// キリのいい縮尺分母へ切り上げる。
+assert.equal(getNiceScaleDenominator(23000), 25000);
+assert.equal(getNiceScaleDenominator(25000), 25000);
+assert.equal(getNiceScaleDenominator(26000), 30000);
+assert.equal(getNiceScaleDenominator(9000), 10000);
+assert.equal(getNiceScaleDenominator(0), 1);
+
+// 強調比（x:y）は用紙サイズに依らず一定。A4 横と A3 横で実現される強調比が一致する。
+function realizedExaggeration(scaleResult, xMaxKm, yRangeM) {
+  // E = (plotHeight / yRange) / (plotWidth / xRange)
+  return (scaleResult.plotHeight / yRangeM) / (scaleResult.plotWidth / (xMaxKm * 1000));
+}
+const a4 = getSectionScale({
+  paperWidthMm: 297,
+  canvasWidthPx: 1600,
+  maxPlotWidthPx: 1200,
+  maxPlotHeightPx: 700,
+  xMaxKm: 10,
+  yRangeM: 1000,
+  exaggeration: 10,
+});
+const a3 = getSectionScale({
+  paperWidthMm: 420,
+  canvasWidthPx: 1600,
+  maxPlotWidthPx: 1200,
+  maxPlotHeightPx: 700,
+  xMaxKm: 10,
+  yRangeM: 1000,
+  exaggeration: 10,
+});
+assert.ok(Math.abs(realizedExaggeration(a4, 10, 1000) - 10) < 1e-6);
+assert.ok(Math.abs(realizedExaggeration(a3, 10, 1000) - 10) < 1e-6);
+// 横縮尺はキリのいい値、縦縮尺 = 横縮尺 / 強調比。
+assert.equal(a4.verticalScale, a4.horizontalScale / 10);
+assert.equal(getNiceScaleDenominator(a4.horizontalScale), a4.horizontalScale);
+// グラフは用紙の作図領域に収まる。
+assert.ok(a4.plotWidth <= 1200 + 1e-6 && a4.plotHeight <= 700 + 1e-6);
+assert.ok(a3.plotWidth <= 1200 + 1e-6 && a3.plotHeight <= 700 + 1e-6);
 
 const routes = JSON.parse(await readFile(new URL("../data/routes.json", import.meta.url), "utf8"));
 assert.equal(routes.length, 15);
