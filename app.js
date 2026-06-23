@@ -238,7 +238,11 @@ export function getAutoElevationAxis(minElevation, maxElevation) {
   const roughMin = shouldStartAtZero ? 0 : minValue - padding;
   const roughMax = maxValue + topPadding;
   const step = getNiceTickStep(Math.max(1, roughMax - roughMin), 7);
-  const min = shouldStartAtZero ? 0 : getNiceFloor(roughMin, step);
+  // 軸を省略（0 から始めない）する場合は、下端を 0.5 目盛りぶん下げて省略記号を
+  // 入れる余白を作る。最初の目盛りは従来どおり nice floor から始まり、軸の全範囲が
+  // 作図高に対応するので強調比（縦横比）は変わらない。
+  const niceFloorMin = getNiceFloor(roughMin, step);
+  const min = shouldStartAtZero ? 0 : Math.max(step * 0.5, niceFloorMin - step * 0.5);
   const max = Math.max(step, getNiceCeil(roughMax, step));
   return { min, max, step };
 }
@@ -344,6 +348,7 @@ function boot() {
   const pageMarginOutput = document.querySelector("#page-margin-output");
   const previewScaleInput = document.querySelector("#preview-scale");
   const previewScaleOutput = document.querySelector("#preview-scale-output");
+  const exportFormatInput = document.querySelector("#export-format");
   const exportElevationButton = document.querySelector("#export-elevation");
   const exportSlopeButton = document.querySelector("#export-slope");
   const exportNote = document.querySelector("#export-note");
@@ -434,11 +439,11 @@ function boot() {
   });
 
   exportElevationButton.addEventListener("click", () => {
-    downloadCanvas(exportElevationCanvas, `${latestFileName}_profile.png`);
+    exportCanvas(exportElevationCanvas, `${latestFileName}_profile`);
   });
 
   exportSlopeButton.addEventListener("click", () => {
-    downloadCanvas(exportSlopeCanvas, `${latestFileName}_slope.png`);
+    exportCanvas(exportSlopeCanvas, `${latestFileName}_slope`);
   });
 
   fileInput.addEventListener("change", async () => {
@@ -1020,23 +1025,28 @@ function boot() {
     ctx.fillText(yLabel, 0, 0);
     ctx.restore();
     if (options.showYAxisBreak) {
-      // 省略記号は Y 軸線（plot.left）上に重ねて配置する。
-      drawYAxisBreak(ctx, plot.left, plot.bottom - 4);
+      // 最初の目盛り（yStart）と軸の下端（plot.bottom）の間にできた余白の中央へ、
+      // Y 軸線上に省略記号を置く。これで 原点 → 記号 → 目盛り の順に並ぶ。
+      const firstTickPy = mapValue(yStart, yMin, yMax, plot.bottom, plot.top);
+      const gap = plot.bottom - firstTickPy;
+      drawYAxisBreak(ctx, plot.left, plot.bottom - gap / 2, gap);
     }
     ctx.restore();
   }
 
-  function drawYAxisBreak(ctx, x, y) {
+  function drawYAxisBreak(ctx, x, y, gapHeight = 16) {
     ctx.save();
     const width = 28;
-    const amplitude = 3.2;
+    // 記号の縦サイズを余白の高さに合わせて調整し、目盛りと重ならないようにする。
+    const amplitude = clamp(gapHeight * 0.12, 2, 3.2);
+    const lineSpacing = clamp(gapHeight * 0.26, 4, 6);
     const drawWave = (strokeStyle, lineWidth) => {
       ctx.strokeStyle = strokeStyle;
       ctx.lineWidth = lineWidth;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       for (let line = 0; line < 2; line += 1) {
-        const offsetY = y - 7 + line * 6;
+        const offsetY = y - lineSpacing / 2 + line * lineSpacing;
         ctx.beginPath();
         for (let i = 0; i <= width; i += 2) {
           const px = x - width / 2 + i;
@@ -1184,11 +1194,44 @@ function boot() {
     return toMin + ((value - fromMin) / (fromMax - fromMin)) * (toMax - toMin);
   }
 
+  // 選択された出力形式（PNG / PDF）でキャンバスを書き出す。
+  function exportCanvas(canvas, baseName) {
+    const format = exportFormatInput.value === "pdf" ? "pdf" : "png";
+    if (format === "pdf") {
+      try {
+        downloadCanvasAsPdf(canvas, `${baseName}.pdf`, paperSizeInput.value);
+      } catch (error) {
+        console.error(error);
+        updateStatus("PDF の生成に失敗しました。PNG で保存するか、時間をおいて再試行してください。");
+      }
+      return;
+    }
+    downloadCanvas(canvas, `${baseName}.png`);
+  }
+
   function downloadCanvas(canvas, filename) {
     const link = document.createElement("a");
     link.href = canvas.toDataURL("image/png");
     link.download = filename;
     link.click();
+  }
+
+  // 用紙の実寸（mm）に合わせた 1 ページの PDF を作り、キャンバス画像を全面に貼る。
+  // キャンバスは用紙と同じ縦横比で描かれているため、歪まずにページ全体へ収まる。
+  function downloadCanvasAsPdf(canvas, filename, paperKey) {
+    const jsPdfNamespace = window.jspdf;
+    if (!jsPdfNamespace?.jsPDF) {
+      throw new Error("jsPDF が読み込まれていません。");
+    }
+    const paper = PAPER_SIZES[paperKey] ?? PAPER_SIZES["a4-landscape"];
+    const widthMm = paper.widthMm;
+    const heightMm = widthMm / paper.ratio;
+    const orientation = widthMm >= heightMm ? "landscape" : "portrait";
+    const pdf = new jsPdfNamespace.jsPDF({ orientation, unit: "mm", format: [widthMm, heightMm] });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, pageWidth, pageHeight);
+    pdf.save(filename);
   }
 
   function updateMetrics(stats) {
@@ -1212,6 +1255,7 @@ function boot() {
     slopeColorInput.disabled = isBusy;
     pageMarginInput.disabled = isBusy;
     previewScaleInput.disabled = isBusy;
+    exportFormatInput.disabled = isBusy;
     exportElevationButton.disabled = isBusy || !latestStats;
     exportSlopeButton.disabled = isBusy || !latestStats;
     routeButtons.querySelectorAll("button").forEach((button) => {
