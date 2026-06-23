@@ -114,8 +114,15 @@
             <input id="preview-scale" type="range" min="45" max="100" value="100" />
           </label>
           <output id="preview-scale-output" for="preview-scale">100%</output>
-          <button id="export-elevation" type="button" disabled>断面図 PNG</button>
-          <button id="export-slope" type="button" disabled>傾斜図 PNG</button>
+          <label>
+            出力形式
+            <select id="export-format">
+              <option value="png">PNG</option>
+              <option value="pdf">PDF</option>
+            </select>
+          </label>
+          <button id="export-elevation" type="button" disabled>断面図を保存</button>
+          <button id="export-slope" type="button" disabled>傾斜図を保存</button>
         </div>
         <div class="export-preview-grid">
           <div class="export-preview">
@@ -154,6 +161,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
-    <script type="module" src="./app.js?v=20260622-top-headroom"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+    <script type="module" src="./app.js?v=20260623-pdf-export"></script>
   </body>
 </html>

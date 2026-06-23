@@ -344,6 +344,7 @@ function boot() {
   const pageMarginOutput = document.querySelector("#page-margin-output");
   const previewScaleInput = document.querySelector("#preview-scale");
   const previewScaleOutput = document.querySelector("#preview-scale-output");
+  const exportFormatInput = document.querySelector("#export-format");
   const exportElevationButton = document.querySelector("#export-elevation");
   const exportSlopeButton = document.querySelector("#export-slope");
   const exportNote = document.querySelector("#export-note");
@@ -434,11 +435,11 @@ function boot() {
   });
 
   exportElevationButton.addEventListener("click", () => {
-    downloadCanvas(exportElevationCanvas, `${latestFileName}_profile.png`);
+    exportCanvas(exportElevationCanvas, `${latestFileName}_profile`);
   });
 
   exportSlopeButton.addEventListener("click", () => {
-    downloadCanvas(exportSlopeCanvas, `${latestFileName}_slope.png`);
+    exportCanvas(exportSlopeCanvas, `${latestFileName}_slope`);
   });
 
   fileInput.addEventListener("change", async () => {
@@ -1184,11 +1185,44 @@ function boot() {
     return toMin + ((value - fromMin) / (fromMax - fromMin)) * (toMax - toMin);
   }
 
+  // 選択された出力形式（PNG / PDF）でキャンバスを書き出す。
+  function exportCanvas(canvas, baseName) {
+    const format = exportFormatInput.value === "pdf" ? "pdf" : "png";
+    if (format === "pdf") {
+      try {
+        downloadCanvasAsPdf(canvas, `${baseName}.pdf`, paperSizeInput.value);
+      } catch (error) {
+        console.error(error);
+        updateStatus("PDF の生成に失敗しました。PNG で保存するか、時間をおいて再試行してください。");
+      }
+      return;
+    }
+    downloadCanvas(canvas, `${baseName}.png`);
+  }
+
   function downloadCanvas(canvas, filename) {
     const link = document.createElement("a");
     link.href = canvas.toDataURL("image/png");
     link.download = filename;
     link.click();
+  }
+
+  // 用紙の実寸（mm）に合わせた 1 ページの PDF を作り、キャンバス画像を全面に貼る。
+  // キャンバスは用紙と同じ縦横比で描かれているため、歪まずにページ全体へ収まる。
+  function downloadCanvasAsPdf(canvas, filename, paperKey) {
+    const jsPdfNamespace = window.jspdf;
+    if (!jsPdfNamespace?.jsPDF) {
+      throw new Error("jsPDF が読み込まれていません。");
+    }
+    const paper = PAPER_SIZES[paperKey] ?? PAPER_SIZES["a4-landscape"];
+    const widthMm = paper.widthMm;
+    const heightMm = widthMm / paper.ratio;
+    const orientation = widthMm >= heightMm ? "landscape" : "portrait";
+    const pdf = new jsPdfNamespace.jsPDF({ orientation, unit: "mm", format: [widthMm, heightMm] });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    pdf.addImage(canvas.toDataURL("image/png"), "PNG", 0, 0, pageWidth, pageHeight);
+    pdf.save(filename);
   }
 
   function updateMetrics(stats) {
@@ -1212,6 +1246,7 @@ function boot() {
     slopeColorInput.disabled = isBusy;
     pageMarginInput.disabled = isBusy;
     previewScaleInput.disabled = isBusy;
+    exportFormatInput.disabled = isBusy;
     exportElevationButton.disabled = isBusy || !latestStats;
     exportSlopeButton.disabled = isBusy || !latestStats;
     routeButtons.querySelectorAll("button").forEach((button) => {
