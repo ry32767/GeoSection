@@ -238,7 +238,11 @@ export function getAutoElevationAxis(minElevation, maxElevation) {
   const roughMin = shouldStartAtZero ? 0 : minValue - padding;
   const roughMax = maxValue + topPadding;
   const step = getNiceTickStep(Math.max(1, roughMax - roughMin), 7);
-  const min = shouldStartAtZero ? 0 : getNiceFloor(roughMin, step);
+  // 軸を省略（0 から始めない）する場合は、下端を 0.5 目盛りぶん下げて省略記号を
+  // 入れる余白を作る。最初の目盛りは従来どおり nice floor から始まり、軸の全範囲が
+  // 作図高に対応するので強調比（縦横比）は変わらない。
+  const niceFloorMin = getNiceFloor(roughMin, step);
+  const min = shouldStartAtZero ? 0 : Math.max(step * 0.5, niceFloorMin - step * 0.5);
   const max = Math.max(step, getNiceCeil(roughMax, step));
   return { min, max, step };
 }
@@ -1021,23 +1025,28 @@ function boot() {
     ctx.fillText(yLabel, 0, 0);
     ctx.restore();
     if (options.showYAxisBreak) {
-      // 省略記号は Y 軸線（plot.left）上に重ねて配置する。
-      drawYAxisBreak(ctx, plot.left, plot.bottom - 4);
+      // 最初の目盛り（yStart）と軸の下端（plot.bottom）の間にできた余白の中央へ、
+      // Y 軸線上に省略記号を置く。これで 原点 → 記号 → 目盛り の順に並ぶ。
+      const firstTickPy = mapValue(yStart, yMin, yMax, plot.bottom, plot.top);
+      const gap = plot.bottom - firstTickPy;
+      drawYAxisBreak(ctx, plot.left, plot.bottom - gap / 2, gap);
     }
     ctx.restore();
   }
 
-  function drawYAxisBreak(ctx, x, y) {
+  function drawYAxisBreak(ctx, x, y, gapHeight = 16) {
     ctx.save();
     const width = 28;
-    const amplitude = 3.2;
+    // 記号の縦サイズを余白の高さに合わせて調整し、目盛りと重ならないようにする。
+    const amplitude = clamp(gapHeight * 0.12, 2, 3.2);
+    const lineSpacing = clamp(gapHeight * 0.26, 4, 6);
     const drawWave = (strokeStyle, lineWidth) => {
       ctx.strokeStyle = strokeStyle;
       ctx.lineWidth = lineWidth;
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       for (let line = 0; line < 2; line += 1) {
-        const offsetY = y - 7 + line * 6;
+        const offsetY = y - lineSpacing / 2 + line * lineSpacing;
         ctx.beginPath();
         for (let i = 0; i <= width; i += 2) {
           const px = x - width / 2 + i;
