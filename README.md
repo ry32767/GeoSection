@@ -2,9 +2,11 @@
 
 GPX ファイルから地図上のルート、断面図、傾斜図を生成する GitHub Pages 向けの静的 Web アプリです。GPX に標高が入っていない点がある場合は、緯度経度を公開標高 API に送って標高を補完し、補完済み GPX をダウンロードできます。
 
+**公開リンク: <https://ry32767.github.io/GeoSection/>**
+
 ## 使い方
 
-1. GitHub Pages で公開された `GeoSection` を開きます。
+1. 公開リンク <https://ry32767.github.io/GeoSection/> を開きます。
 2. 登録済み GPX ボタンを押すか、手元の `.gpx` ファイルを選択します。
 3. 標高が無い点がある場合は、標高 API により補完されます。
 4. 地図、断面図、傾斜図を確認します。
@@ -28,4 +30,4 @@ npm.cmd run build
 
 ## GitHub Pages
 
-`.github/workflows/pages.yml` により、`main` ブランチへの push または手動実行で `dist/` が GitHub Pages にデプロイされます。
+`.github/workflows/pages.yml` により、`main` ブランチへの push または手動実行で `dist/` が `gh-pages` ブランチへデプロイされ、<https://ry32767.github.io/GeoSection/> で公開されます。
