@@ -1,0 +1,729 @@
+{
+  "metadata": {
+    "skill_name": "spec-writer",
+    "skill_path": "/home/user/GeoSection/.claude/skills/spec-writer",
+    "executor_model": "<model-name>",
+    "analyzer_model": "<model-name>",
+    "timestamp": "2026-06-24T10:52:36Z",
+    "evals_run": [
+      1,
+      2,
+      3
+    ],
+    "runs_per_configuration": 3
+  },
+  "runs": [
+    {
+      "eval_id": 1,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "現状（GPX のみ対応）に触れ、KML 追加後も GPX の既存挙動を壊さないという制約を明示している",
+          "passed": true,
+          "evidence": "「GeoSection は現在 GPX のみを入力として受け付け」と現状を明記し、§1 で「既存の GPX の挙動（解析・標高補完・補完済み GPX 保存・登録済み GPX・エクスポート）は一切変えない。」と太字で制約を宣言。§3「現状（壊してはいけない挙動）」を実コード行番号付きで列挙し、§5 末尾に「GPX の挙動退行ゼロの担保: format 未指定時は gpx 既定」とある。"
+        },
+        {
+          "text": "app.js / index.html など実在するファイル・コンポーネント単位で、何を追加・変更するかを具体的に示している",
+          "passed": true,
+          "evidence": "§4.5「影響コンポーネント早見表」が parseGpx(55=変更なし)/parseKml(新規)/analyzeGpxText(523=1行差し替え)/index.html(accept/ラベル追記)/ファイル選択ハンドラ(449)等を表で列挙。実検証で app.js の parseGpx(55-91)・writeElevationsToGpx(314)・analyzeGpxText(523)・fileInput handler(449-465)・index.html L24 の accept 値がすべて実在し一致。"
+        },
+        {
+          "text": "KML をパースして GPX と共通の内部データ構造（ルート点・標高など）へ正規化する方針を設計している",
+          "passed": true,
+          "evidence": "§4.1「決定: GPX も KML も、既存の points 形状 [{ lat, lon, elevation: number|null, node: Element|null }] に正規化する。」と中心決定を明示。§4.2 で parseKml が parseGpx と同じ {doc, points}（node:null）を返すと規定。実コードの points 形状（app.js 82-87）と一致する正規化先。"
+        },
+        {
+          "text": "標高が無い KML・座標のみ・不正な拡張子など、入力の欠損／異常系のエッジケースとその扱いを挙げている",
+          "passed": true,
+          "evidence": "§5 が「標高なし KML→elevation=null で既存補完フロー」「1点/0点→2点以上必要エラー」「経度緯度逆転」「<coordinates>表記揺れ(改行/タブ)」「不正XML→parsererror エラー」「KMZ→明示エラー」「.txt 等不正ファイル」を個別に確定処理付きで列挙。§4.3 に .kmz/ZIP シグネチャ(PK)ガードも記載。"
+        },
+        {
+          "text": "「正しく動く」ではなく観測可能な振る舞いで書かれた、検証可能な受け入れ基準（テスト観点）を含む",
+          "passed": true,
+          "evidence": "§6 で parseKmlCoordString(\"139.5,35.5,100 ...\")→{lat:35.5,lon:139.5,elevation:100} と数値アサート、高度欠落→elevation===null、手動確認で「GPX と地図位置が一致し #metric-distance の差が 0.01km 未満」「補完済み GPX 保存ボタンが無効のまま」など観測可能な基準を提示。検証で tests/run-tests.mjs が Node 環境(DOMParser非依存)である点も spec の前提と一致。"
+        },
+        {
+          "text": "リクエストの言い換えに留まらず、具体的な設計判断（データ構造・処理フロー・関数分割など）を加えている",
+          "passed": true,
+          "evidence": "新規関数 parseKml/parseRoute/detectFormat/parseKmlCoordString への分割、座標ソース優先順位(gx:Track→LineString→Point列)、KML は lon,lat,ele 順で読む(§4.1 の逆転落とし穴の明文化)、analyzeGpxText に format=\"gpx\" 引数追加し parseGpx 呼び出しを parseRoute に置換、KML 時 latestGpxText=\"\"+ボタン無効ガードなど具体判断多数。"
+        },
+        {
+          "text": "推奨する実装方針を1つに確定させており（複数案の列挙で終わらず）、主要な技術判断を未解決の論点へ先送りしていない",
+          "passed": true,
+          "evidence": "§7「却下した代替案」で XSLT/正規表現変換・ダミーDOM埋め・全自動連結・KMZ解凍を明示的に却下し直接 parseKml 正規化に確定。「人間/プロダクト判断が必要な未解決点」も『当面は先頭固定で実装』『routes.json 追加は範囲外』と実装方針自体は確定。§8 実装ステップも単一案で一貫。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "with_skill",
+      "run_number": 2,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "現状（GPX のみ対応）に触れ、KML 追加後も GPX の既存挙動を壊さないという制約を明示している",
+          "passed": true,
+          "evidence": "§1「現状は GPX のみを読み込めるが」「既存の GPX の挙動（解析結果、標高補完、補完済み GPX の保存、登録済みルート一覧）は一切変えない」。§3「現状（壊してはいけない挙動）」で app.js の処理フローと「保持すべき不変条件（壊さない根拠）」を列挙。"
+        },
+        {
+          "text": "app.js / index.html など実在するファイル・コンポーネント単位で、何を追加・変更するかを具体的に示している",
+          "passed": true,
+          "evidence": "§4.2「parseKml(xmlText) の実装（app.js、parseGpx の直後に追加）」、§4.3「index.html: accept に KML を追加」と change ハンドラ改修、§4.4「analyzeGpxText → analyzeRouteText(text, routeName, format)」、§8 実装ステップが app.js/index.html/tests/run-tests.mjs/README.md ごとに具体的記述。"
+        },
+        {
+          "text": "KML をパースして GPX と共通の内部データ構造（ルート点・標高など）へ正規化する方針を設計している",
+          "passed": true,
+          "evidence": "§4.0「正規化先は…最小共通形 { lat, lon, elevation }」「parseGpx / parseKml の戻り値を統一インターフェースに揃える: { points:[{lat,lon,elevation}], format, doc }」。§4.1 で coordinates の lon,lat,ele→{lat,lon,elevation} への変換を設計。"
+        },
+        {
+          "text": "標高が無い KML・座標のみ・不正な拡張子など、入力の欠損／異常系のエッジケースとその扱いを挙げている",
+          "passed": true,
+          "evidence": "§5 のエッジケース表に「座標が lon,lat（標高省略・2 要素）→ elevation:null → needsElevation で補完」「.kmz → 未対応メッセージで中断」「XML として壊れた KML → parsererror 検出」「lon,lat,abc → ele は null 扱い」「標高 0 → 有効値」等を列挙。"
+        },
+        {
+          "text": "「正しく動く」ではなく観測可能な振る舞いで書かれた、検証可能な受け入れ基準（テスト観点）を含む",
+          "passed": true,
+          "evidence": "§6 自動テストで parseCoordinateText/buildGpxFromPoints の入出力を具体値で指定。手動確認で『概要 4 指標が - でない』『保存→再アップロードで同一断面図が再現（ラウンドトリップ）』等の観測可能な基準。"
+        },
+        {
+          "text": "リクエストの言い換えに留まらず、具体的な設計判断（データ構造・処理フロー・関数分割など）を加えている",
+          "passed": true,
+          "evidence": "統一戻り値 {points,format,doc} の決定（§4.0）、parseCoordinateText を純関数として切り出し（§4.2）、buildGpxFromPoints を doc 改変でなく文字列テンプレートで生成する判断（§4.4）、§4.5 の処理フロー図、getElementsByTagNameNS 採用理由（§4.1）など具体的判断が多数。"
+        },
+        {
+          "text": "推奨する実装方針を1つに確定させており（複数案の列挙で終わらず）、主要な技術判断を未解決の論点へ先送りしていない",
+          "passed": true,
+          "evidence": "§4.0「中心となる決定（load-bearing）」で正規化形と保存方式を1案に確定し、§7 で代替案3つを明示的に却下。保存は GPX に一本化と断定。未解決論点は routes.json への KML 追加・KMZ 対応というプロダクト判断のみ。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "複数 GPX 連結時の距離の通し積算と、各日の境界（区切り／色分け）をどうデータに持たせるかを設計している",
+          "passed": true,
+          "evidence": "§4.3 のデータモデルで stats に「distancesKm は通し積算済み」と明記し、境界を `dayBoundaries: [5.39, 18.89]`（境界の通し距離[km]の配列）、色分けを `dayRanges: [{day:0,startKm,endKm},...]` と `days[].color` で保持。§4.1 手順2で通し距離 = `stats[d].distancesKm[i] + offsetKm[d]`、`offsetKm[d]=offsetKm[d-1]+stats[d-1].totalKm` と積算式を定義。各点に所属日 `day` を付与する設計。"
+        },
+        {
+          "text": "既存の単一 GPX 表示・地図と断面図の同期挙動を壊さない方針に触れている",
+          "passed": true,
+          "evidence": "§3.6/§4.3 で「latestPoints は従来どおりフラットな点配列に保ち、§3.6 のホバー/近傍ロジックを無改修で生かす」と明記。§4.1「N=1 の不変性: 日が 1 つなら offsetKm[0]=0 で mergeRouteStats の出力は computeRouteStats 単体と完全一致」。findNearestPointIndex/highlightAtIndex/map.on(\"mousemove\") が latestPoints[index] 前提である点を §3.6 で特定し、結合後も 1 本のフラット配列に保つことを壊さない条件として明示。"
+        },
+        {
+          "text": "影響を受ける実在のコンポーネント（断面図描画・データ読み込み等）をファイル/関数粒度で示している",
+          "passed": true,
+          "evidence": "§3 と §4.4 で parseGpx(L55-91)、computeRouteStats(L93-129)、analyzeGpxText(L523-548)、renderAnalysis(L550-562)、renderMap(L564-576)、renderCharts(L578-668)、drawElevationExport/drawSlopeExport(L751-826)、drawLine(L1065-1078)、updateMetrics(L1237-1242)、drawPlotInfoBox(L1113) を名指し。検証の結果これらの行番号・シグネチャは実コードと一致（drawLine は実際に L1065-1078、updateMetrics は L1237-1242 など）。index.html の #gpx-file、styles.css のチップも示す。"
+        },
+        {
+          "text": "日付/ファイルの並び順の決定方法と、タイムスタンプ欠如など順序が決まらないケースのエッジケースを扱う",
+          "passed": true,
+          "evidence": "§4.2「正は『ユーザーが選んだ順』。登録済みボタンは押した順、ファイル選択は FileList の順」。時刻自動並べ替えを既定無効にする理由を実データで裏付け:「合宿 GPX は Day1/2/3 すべて先頭 <time> が同一の偽値 2025-06-23T23:00:00Z」。検証で全3日が同一 time であることを確認。さらに「同名・重複ファイル（春山合宿 day2 と day2 copy）でも選択順で並べる」を §5 エッジケース表で扱う（両ファイルの実在も確認）。"
+        },
+        {
+          "text": "「3本連結で距離が単調増加し境界が描画される」のような検証可能な受け入れ基準を含む",
+          "passed": true,
+          "evidence": "§6.1 で具体値テスト: N=1 恒等(deepEqual, dayBoundaries=[])、距離通し積算で「totalKm === computeRouteStats(A)+computeRouteStats(B)（誤差<1e-9）」かつ素朴連結とは「5km 近く差が出ることも assert」、dayBoundaries≈[5.39,18.89]（±0.05）、totalKm≈31.06km。§6.2 手動受け入れ「概要バンド距離 31.06km、断面線が3色、境界に2本の縦破線、右上凡例3行」。"
+        },
+        {
+          "text": "レビュー可能な小さい単位に割った、順序付きの実装ステップを提示している",
+          "passed": true,
+          "evidence": "§8 実装ステップが 1〜7 の順序付きで、各ステップに検証点を付す:「1. mergeRouteStats を実装し GeoSectionCore 公開、テスト追加、npm test 緑」「2. DAY_COLORS と day 付与、analyzeGpxText を薄いラッパにリファクタ（単一ソースのみで挙動不変確認）」「3. 画面描画の結合対応」「4. 入力 UI 複数選択」「5. 印刷エクスポート」「6. エッジ処理」「7. 最終検証」。各段階が独立にレビュー/検証可能な単位。"
+        },
+        {
+          "text": "日境界での距離の積算方法（日をまたぐ地理的ギャップを加算するか否か）という中心的な設計判断を、正しさの観点から明示的に決め切っている（既存関数の再利用で済ませて副作用を見落としていない）",
+          "passed": true,
+          "evidence": "§4.1「★最重要の決定」で素朴連結([...d1,...d2,...d3]→computeRouteStats)を「静かに間違う」として却下。computeRouteStats が L103-106 で隣接点 haversine を無条件加算する副作用と、movingAverage(L114)が境界をまたいで滲む副作用を実コードで特定（検証で一致）。決定:「各日を独立に解析し距離だけ通し番号で再ベース。日境界の区間は距離にも傾斜にも一切寄与させない」。地理的ギャップ(別トレイルヘッド/2.6m)を加算しないと明示。§7 で代替案 A/B(境界パッチ)も移動平均の残存問題を理由に却下。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "with_skill",
+      "run_number": 2,
+      "result": {
+        "pass_rate": 1,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "複数 GPX 連結時の距離の通し積算と、各日の境界（区切り／色分け）をどうデータに持たせるかを設計している",
+          "passed": true,
+          "evidence": "§4.1 の MergedRoute で各点に segment（所属 Day index）を付与し、segments[] に startKm/endKm/totalKm/color/startPointIndex/endPointIndex、boundaryKm:[totalKm0, totalKm0+totalKm1]（区切り線を引く累積距離、最後の終端は含めない）を持たせる。§4.3 mergeRoutes が distancesKm を kmOffset で再ベース積算し points.push({...p, segment: di}) で境界を保持する。"
+        },
+        {
+          "text": "既存の単一 GPX 表示・地図と断面図の同期挙動を壊さない方針に触れている",
+          "passed": true,
+          "evidence": "§4.3「返り値は computeRouteStats のスーパーセット…既存の updateMetrics/drawElevationExport/renderCharts の入力契約を満たす」。§4.4a「データセットを分割せず X を共有できるので、既存のホバー連携 setChartActiveIndex / findNearestPointIndex がインデックスのままで動く」。§3 構造的含意「latestPoints はフラット点配列…computeRouteStats/findNearestPointIndex/highlightAtIndex はすべて単一フラット配列を前提」。N=1 は segments 長1・boundaryKm 空で同経路。merge OFF は『一切経路を変えない』を既定とする（§4.6）。"
+        },
+        {
+          "text": "影響を受ける実在のコンポーネント（断面図描画・データ読み込み等）をファイル/関数粒度で示している",
+          "passed": true,
+          "evidence": "renderCharts(app.js:578)、renderMap(app.js:564)、drawElevationExport(app.js:764)/drawSlopeExport(app.js:810)、updateMetrics(app.js:1237)、drawLine(app.js:1065)、selectionMarkerPlugin(app.js:682)、parseGpx(app.js:55)、computeRouteStats(app.js:93)、analyzeGpxText(app.js:523)、download-gpx(app.js:467) を関数/行粒度で列挙。検証の結果これらの行番号・関数名は実コードと一致した。"
+        },
+        {
+          "text": "日付/ファイルの並び順の決定方法と、タイムスタンプ欠如など順序が決まらないケースのエッジケースを扱う",
+          "passed": true,
+          "evidence": "§4.2「既定の順序はユーザーが選んだ順」「登録済みは『クリックした順に追加』、ファイル入力は『FileList の順』」、↑/↓ 並べ替え・× 除外を用意。時刻自動並べ替えはしない根拠として『同梱 Day1/Day2 の先頭 <time> が同一(2025-06-23T23:00:00Z)、かつ parseGpx は time を持たない』を提示（実データ・実コードで検証一致）。§5 で『連結順が逆』『ファイル選択順が OS 依存でばらつく』を表で処理。"
+        },
+        {
+          "text": "「3本連結で距離が単調増加し境界が描画される」のような検証可能な受け入れ基準を含む",
+          "passed": true,
+          "evidence": "§6.1: merged.totalKm == day1.totalKm+day2.totalKm（許容1e-9）、『単純連結なら約90km の直線が入るが mergeRoutes は約0.222km(<0.3)』、distancesKm 全体が単調非減少、boundaryKm 長=Day数-1 かつ boundaryKm[0]===day1.totalKm。§6.2 手動基準『断面図 X 軸が0から3日合計距離まで連続し、Day 境界に縦の区切り線が2本…境界に縦の崖/急下降のスパイクが無い』。具体数値・許容誤差付きで検証可能。"
+        },
+        {
+          "text": "レビュー可能な小さい単位に割った、順序付きの実装ステップを提示している",
+          "passed": true,
+          "evidence": "§8 で1〜10 の順序付きステップ: 1コア純関数(mergeRoutes/SEGMENT_COLORS)→2単体テスト→3入力UI(HTML/CSS)→4状態と取り込み→5解析統合(renderMergedAnalysis)→6画面グラフ色分け→7地図色分け→8エクスポート色分け→9GPX保存→10検証。各ステップが独立レビュー可能な単位に分割されている。"
+        },
+        {
+          "text": "日境界での距離の積算方法（日をまたぐ地理的ギャップを加算するか否か）という中心的な設計判断を、正しさの観点から明示的に決め切っている（既存関数の再利用で済ませて副作用を見落としていない）",
+          "passed": true,
+          "evidence": "§4.0 を load-bearing 決定として独立節化。素朴な再利用を明示却下:『haversineMeters(points[i-1],points[i]) が Day1終点→Day2始点の直線距離を1区間として積算…rawSlopes の境界区間が巨大角になり movingAverage がその外れ値を境界前後ににじませる。既存関数の再利用が、依頼ユースケースで静かに壊れた成果物を生む』。採用案『各 Day を独立に統計計算し、距離だけを前 Day 終端から再ベースして連結。境界をまたぐ距離・傾斜・累積上昇/下降は一切作らない』。実コード検証: computeRouteStats(app.js:103) は隣接点全対で haversine 積算しセグメント非対応、movingAverage(app.js:137) は slice で外れ値を近傍へ拡散 — 副作用の指摘は正確。§7 で代替案B(null点挟み)も統計歪みを理由に却下。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.857,
+        "passed": 6,
+        "failed": 1,
+        "total": 7,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "現状（全て手入力）と新フロー（画像→OCR→フォーム下書き）の差分・スコープ（goals/non-goals）を明確化している",
+          "passed": true,
+          "evidence": "§1で現状を「申請者が金額・日付・店名をすべて手入力している」と明記し、§3「現状 (what exists today)」で既存ボットの接続点（Slackイベント受信、申請モーダル、永続化、Slackトークン）を具体的に列挙。§2にGoals（画像アップロード→3フィールド抽出→モーダル下書き）と詳細なNon-goals（複数レシート一括処理、品目明細抽出、税抜/税込判別、多通貨、カテゴリ自動推定、自動承認、手入力フロー変更）を列挙し、新旧の差分とスコープ境界が明確。"
+        },
+        {
+          "text": "OCR 抽出のデータモデル（金額／日付／店名 + 信頼度など）と、誤読時に人が確認・修正するフローを設計している",
+          "passed": true,
+          "evidence": "§4.1で`ReceiptExtraction`をJSON例つきで定義し、各フィールドが`{value, confidence, raw}`を持ち（amount=数値で主要単位、date=ISO8601、merchant=正規化文字列+raw原文）、currency/model/status/errorを規定。§4.4で「埋めた上で⚠を付ける」確認・修正フローを設計し、`field_initial()`の3分岐（≥0.80そのまま/0.50–0.80は値+⚠要確認ラベル/<0.50は空欄+手入力ヒント）を確定。自動提出せず人がモーダルで確認・修正する設計。"
+        },
+        {
+          "text": "外部 OCR サービスや Slack のファイル/メッセージ API など、コンポーネント間の連携インターフェースを具体化している",
+          "passed": true,
+          "evidence": "§4.2で実ファイル/関数単位の表（receipt.py, ocr/extract.py, slack/files.py, views/expense_modal.py 等）と各役割を提示。§4.3でClaude呼び出しの具体的なAPIインターフェース（`messages.create`に`output_config={\"format\":{\"type\":\"json_schema\",...}}`、image/documentブロックのbase64、`stop_reason==\"refusal\"`判定）をコードスケッチで確定。Slack側は`files.info`でmime取得、`url_private`からダウンロード、`views.open`/`views.update`でモーダル起動、`file_shared`イベント受信と名指し。"
+        },
+        {
+          "text": "低解像度・多通貨・1枚に複数レシート・非レシート画像などのエッジケースとエラー処理を挙げている",
+          "passed": true,
+          "evidence": "§5のエッジケース表が、非画像添付（mime allowlist）、複数画像（先頭のみ+ephemeral通知）、サイズ超過（10MB上限）、ダウンロード失敗（403/期限切れ→failed+手入力）、low_quality（不鮮明で抽出不能）、部分成功（amountのみ取得）、金額誤読（合計vsお釣り）、日付曖昧表記、多通貨外貨レシート、refusal、レート制限429/5xx、タイムアウト、重複イベント冪等化、スキーマ不一致を網羅。要求の低解像度（low_quality）・多通貨・複数レシート・非レシート画像をすべて個別に扱っている。"
+        },
+        {
+          "text": "抽出精度や人手確認ステップなど、観測可能で検証可能な受け入れ基準を含む",
+          "passed": true,
+          "evidence": "§6で観測可能な機能受け入れ基準（3秒以内に「読み取り中…」、中央値5秒以内でモーダル、confidence帯ごとの装飾、403モックで空モーダル、refusalモックで例外落ちなし等）と、数値化された精度目標（amount完全一致≥95%/confidence≥0.80サブセットで≥99%、date≥90%、merchant≥85%）、calibration確認（confidence≥0.80の実正解率≥95%）、誤提出ガード（<0.50を空欄にし低確信度の提出が評価セットで0件）、ユニット/結合テスト（field_initialの境界値網羅、冪等性）を規定。100枚の正解付き評価データセットも明示。"
+        },
+        {
+          "text": "PII の取り扱い・OCR コスト・誤申請リスクなど、未解決の論点／リスクに言及している",
+          "passed": true,
+          "evidence": "§7のオープン論点でレシート画像の保存ポリシー（保持期間・退職者のSlack削除時の扱いを経理/法務判断）、Claudeへのレシート画像送信のデータ処理社内承認（NGならOCRエンジン差し替え）、「合計」の定義（社の経費規程依存）を人間/プロダクト判断事項として明示。誤申請リスクは§4.4「低確信度まで埋めるともっともらしい誤りをユーザーが見落として提出する危険」と§6「誤提出ガード」「自動提出しない設計が最終防御」で扱う。監査で画像バイト列を保存しない方針（§5末尾）はPII配慮。"
+        },
+        {
+          "text": "信頼度しきい値・リトライ回数・目標精度などの主要パラメータを具体的な数値で確定しており、「後で調整」「未定」に留めていない",
+          "passed": false,
+          "evidence": "confidence閾値はCONFIDENCE_FILL=0.80/CONFIDENCE_FLOOR=0.50、ファイルサイズ上限10MB、目標精度（amount≥95%/99%、date≥90%、merchant≥85%）、max_tokens=1024、評価セット100枚と多くを数値確定している点は要件を満たすが、リトライ回数は「SDKの自動リトライ(`max_retries`)に委ねる」とするのみで具体的な回数を確定していない（SDK既定は2回だがスペック内に数値が無い）。また`thinking={\"type\":\"adaptive\"}`に併記された「`budget_tokens`は400」はAPI仕様と矛盾する確定値で、Opus 4.8では`budget_tokens`を渡すと400エラーになり`budget_tokens:400`は設定不可（adaptiveのみが有効、`budget_tokens`は完全に削除）。主要パラメータ確定の意図は強いが、リトライ回数の数値欠落と誤った確定パラメータがあるため不合格。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "with_skill",
+      "run_number": 2,
+      "result": {
+        "pass_rate": 1,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "現状（全て手入力）と新フロー（画像→OCR→フォーム下書き）の差分・スコープ（goals/non-goals）を明確化している",
+          "passed": true,
+          "evidence": "§1で現状「現在すべて手入力で申請フォームを埋めている」、新フロー「画像から金額/日付/店名を自動抽出し…下書きとして事前入力」を対比。§2にGoals(「画像1枚…からの自動抽出」)とNon-goals(「明細行（品目ごと）の抽出はしない」「複数枚一括…はしない」「多通貨対応はしない」)を明示。§3「壊してはならない現状の挙動」で既存手入力フローの不変条件を列挙。"
+        },
+        {
+          "text": "OCR 抽出のデータモデル（金額／日付／店名 + 信頼度など）と、誤読時に人が確認・修正するフローを設計している",
+          "passed": true,
+          "evidence": "§4.1で `ExtractedReceipt` 型を定義: amount:ExtractedField<number>, date, vendor 各々が `value`,`confidence`(0.0-1.0),`rawText` を持ち、overallStatus('ok'|'partial'|'failed')も定義。誤読時フローは§4.0「OCR 結果は常に『下書き』であり、自動送信は一切しない」、§4.4の閾値0.80未満で「⚠ マーカーと注意ヒント」を付け利用者に確認を促す表、最終的に人がモーダルで修正してsubmit(§4.3)。"
+        },
+        {
+          "text": "外部 OCR サービスや Slack のファイル/メッセージ API など、コンポーネント間の連携インターフェースを具体化している",
+          "passed": true,
+          "evidence": "§4.5でOcrProvider抽象 `OcrProvider { extract(bytes, mimetype): Promise<RawOcr> }` を定義。Slack側は§4.2/§4.3で `files.info`→`url_private_download` を `Authorization: Bearer <bot_token>` で取得、`file_shared`/`message(file_share)`イベント受信、`views.open`でモーダル。§4.6でOAuthスコープ(`files:read`,`im:history`,`chat:write`)とtrigger_id失効問題のボタン経由再trigger方式を具体化。"
+        },
+        {
+          "text": "低解像度・多通貨・1枚に複数レシート・非レシート画像などのエッジケースとエラー処理を挙げている",
+          "passed": true,
+          "evidence": "§5の表に「画像でない添付(zip,docx等)→file_sharedを無視」「複数ファイルを1メッセージ→先頭の画像1枚のみ」「10MB超/解像度過大→取得前にサイズ拒否」「OCR APIタイムアウト/5xx→最大2回リトライ」「桁区切り・通貨記号」「合計とお釣りの取り違え→confidence0.5に減衰」「日付の和暦・揺れ」など多数。多通貨はnon-goal(JPY固定)としつつ§7 Open Questionで論点化。"
+        },
+        {
+          "text": "抽出精度や人手確認ステップなど、観測可能で検証可能な受け入れ基準を含む",
+          "passed": true,
+          "evidence": "§6に機能的受け入れ基準7項目(「おおむね10秒以内にprefill済みモーダルを開くボタンが現れ」「非画像ファイル…ボットは反応しない」等)、抽出精度目標(「金額の正確一致≥95%」「日付≥90%」「店名≥80%」)、リリースゲート「見逃し金額誤り=0件」を定義。単体/結合テスト項目も列挙(confidence0.80境界で⚠切替等)。"
+        },
+        {
+          "text": "PII の取り扱い・OCR コスト・誤申請リスクなど、未解決の論点／リスクに言及している",
+          "passed": true,
+          "evidence": "§7 未解決の論点で「社内レシート画像を外部APIに送ることのデータ保護・契約上の可否(法務/情シス判断)」「レシート画像とログ(PIIを含みうる)の保持期間・保存先…削除ポリシー」を明示。誤申請リスクは§4.0「誤った金額が無確認で経費申請に流れることは…最悪の事故」として中心決定に据え、リリースゲートで「見逃し金額誤り=0件」。"
+        },
+        {
+          "text": "信頼度しきい値・リトライ回数・目標精度などの主要パラメータを具体的な数値で確定しており、「後で調整」「未定」に留めていない",
+          "passed": true,
+          "evidence": "信頼度閾値「閾値 = 0.80」を確定(根拠と0.9/0.6却下理由付き、金額減衰は0.5)。リトライ「最大2回リトライ(指数バックオフ:1s,4s)」。目標精度「金額≥95%/日付≥90%/店名≥80%」。他にサイズ上限10MB、店名100文字、dedup TTL10分、キャッシュTTL30分、評価セット30〜50枚も数値確定。閾値は『運用ログで調整可能』だが初期値は0.80に確定済みで『未定』ではない。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "現状（GPX のみ対応）に触れ、KML 追加後も GPX の既存挙動を壊さないという制約を明示している",
+          "passed": true,
+          "evidence": "セクション1「GeoSection は現在 GPX 専用のツールである」と明記し、成功状態の末尾で「**GPX の既存挙動（読み込み・解析・補完済み GPX 保存・登録済みルート）は一切変わらない。**」と制約を強調。さらにセクション3全体が「現状 (what exists today) — 壊してはならない挙動」として既存の解析入口・データ構造・テスト契約を列挙している。"
+        },
+        {
+          "text": "app.js / index.html など実在するファイル・コンポーネント単位で、何を追加・変更するかを具体的に示している",
+          "passed": true,
+          "evidence": "「`app.js` に `parseGpx` と並べて export 関数 `parseKml(xmlText)` を追加」「`analyzeGpxText` → `analyzeRouteText(xmlText, routeName, format)` に一般化」、`index.html` 24行の input を `accept=\".gpx,.kml,...\"` に変更、`window.GeoSectionCore` への登録追加、`tests/run-tests.mjs` への単体テスト追加など、実在ファイルと行番号・関数名単位で記載。コードベース確認で line 449-465 の change ハンドラ・line 523-548 の analyzeGpxText・line 24 の input が実在することを確認済み。"
+        },
+        {
+          "text": "KML をパースして GPX と共通の内部データ構造（ルート点・標高など）へ正規化する方針を設計している",
+          "passed": true,
+          "evidence": "セクション4.1で共通形 `{ points: [{ lat, lon, elevation, node? }], doc, format, name }` を定義し「描画は `{ lat, lon, elevation }` の正規化点列だけに依存させる」。4.2-(7) で `parseKml` が `{ points, doc: null, format: \"kml\", name }` を返すと明記。「KML 座標の `lon,lat` 反転はこのパーサ内で吸収し、下流には常に `{lat, lon}` で渡す（地図・距離計算・断面図は GPX と完全に同じコードを通る）」と正規化方針が具体的。コードベースで renderAnalysis 以降が lat/lon/elevation のみ参照する点も確認済み。"
+        },
+        {
+          "text": "標高が無い KML・座標のみ・不正な拡張子など、入力の欠損／異常系のエッジケースとその扱いを挙げている",
+          "passed": true,
+          "evidence": "セクション5の表に「標高なし `.kml` → needsElevation true → 既存 API 補完」「`lon,lat`（2値のみ、ele 省略）→ 各点 elevation:null で補完フロー」「座標1点しか無い KML → throw `2 点以上の座標が必要です`」「壊れた XML（parsererror）→ throw」「拡張子は .kml だが中身が GPX」「拡張子無し/不明＋中身が `<kml>`」「KMZ → 非対応でフォールバック」「全角空白混入 → `\\s+` 分割」など多数の欠損・異常系と扱いを列挙。"
+        },
+        {
+          "text": "「正しく動く」ではなく観測可能な振る舞いで書かれた、検証可能な受け入れ基準（テスト観点）を含む",
+          "passed": true,
+          "evidence": "6.1で `parseKmlCoordinates(\"135.0,35.0,100 ...\")` → 具体的な配列を assert、`ele=0` → `elevation:0`（nullでないこと）など期待値が明示。6.2で「サマリの距離が GPX 同等ルートと一致（同一座標なら誤差 < 0.1%）。点数 = KML の有効座標数」「KML 表示中『補完済み GPX を保存』が無効（グレーアウト）」「不正 KML → ステータスにエラー文、直前のルートが消えない」など観測可能な振る舞いで記述。"
+        },
+        {
+          "text": "リクエストの言い換えに留まらず、具体的な設計判断（データ構造・処理フロー・関数分割など）を加えている",
+          "passed": true,
+          "evidence": "4.1で「`node`/`doc` を GPX 専用に切り離し KML は doc=null」というデータモデル判断、「KML パーサに node をでっち上げる楽な道は静かに壊れる」と却下理由を明示。関数分割として `parseKmlCoordinates`（純関数）と `parseKml` を分離（DOMParser 非依存でテスト安定化のため）、`detectFormat` 追加、`analyzeGpxText` を `analyzeRouteText(xmlText, routeName, format)` へ一般化、と単なる言い換えを超えた設計判断が複数ある。"
+        },
+        {
+          "text": "推奨する実装方針を1つに確定させており（複数案の列挙で終わらず）、主要な技術判断を未解決の論点へ先送りしていない",
+          "passed": true,
+          "evidence": "セクション7「却下した代替案」で別ファイル `kml.js`・GPX DOM 捏造・複数 LineString 連結・KML 保存許可・routes.json 追加を各々「（採用）/（不採用）」と明示し1案に確定。複数 LineString は「最初に2点以上を持つ1本のみ採用」と確定。未解決として残すのは KMZ 優先度・複数トラック将来 UI・gx:Track タイムスタンプ利用のみで、いずれも Non-goal に切り出された将来課題であり、本スコープの主要技術判断（パーサ実装・データ構造・振り分け・保存可否）はすべて確定している。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "without_skill",
+      "run_number": 2,
+      "result": {
+        "pass_rate": 1,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "現状（GPX のみ対応）に触れ、KML 追加後も GPX の既存挙動を壊さないという制約を明示している",
+          "passed": true,
+          "evidence": "§1「GeoSection は現在、GPX ファイル...のみを読み込み」、DoD に「既存の GPX の挙動（パース・補完・描画・GPX ダウンロード・登録済みライブラリ）は一切変えない。」と太字で明示。決定2「GPX 経路のコードパスを 1 バイトも変えないことが最優先要件」、§10 リスク表「既存 GPX 経路への影響」も緩和策付きで明示。"
+        },
+        {
+          "text": "app.js / index.html など実在するファイル・コンポーネント単位で、何を追加・変更するかを具体的に示している",
+          "passed": true,
+          "evidence": "§5 変更ファイル一覧表が app.js / index.html / tests/run-tests.mjs / README.md ごとに変更内容を列挙。さらに app.js:523-527 の before/after コード差分、index.html:23-24 の置換、`scripts/build.mjs`/`styles.css` は改修不要と明記。引用した行番号（parseGpx 55-91, writeElevationsToGpx 314-329, change ハンドラ 449-465, GeoSectionCore 1274-1289 等）は実ファイルと一致を確認。"
+        },
+        {
+          "text": "KML をパースして GPX と共通の内部データ構造（ルート点・標高など）へ正規化する方針を設計している",
+          "passed": true,
+          "evidence": "決定1「共通中間表現は既存の `points` 配列をそのまま採用」「KML パーサも同じ形の `points` を返す」。決定4で KML の標高（`<coordinates>` の3番目の値）を `elevation` に吸収し alt 無しは `elevation: null`。parseKmlCoordinates が `{ lat, lon, elevation, node: null }` を返し、既存 parseGpx の `{lat,lon,elevation,node}` 形と一致（実コード app.js:82-87 と整合）。"
+        },
+        {
+          "text": "標高が無い KML・座標のみ・不正な拡張子など、入力の欠損／異常系のエッジケースとその扱いを挙げている",
+          "passed": true,
+          "evidence": "§6 エッジケース表が11ケースを列挙: 「alt 欠落（lon,lat のみ）→ elevation:null → needsElevation true → 既存補完」「alt が 0 の海面点→0は有効値、null と混同しない」「不正な XML→parsererror 検出」「拡張子 .xml で中身が KML→<kml 検出で切替」「拡張子 .kml だが中身が GPX→LineString/Point 不在でエラー」「LineString も Point も無い→throw」など、扱いまで明記。"
+        },
+        {
+          "text": "「正しく動く」ではなく観測可能な振る舞いで書かれた、検証可能な受け入れ基準（テスト観点）を含む",
+          "passed": true,
+          "evidence": "§7 にユニットテストの具体アサート（assert.equal(detectRouteFormat(\"ROUTE.KML\"),\"kml\"); pts[2].elevation === null など）。§8 手動確認は観測可能な振る舞いで記述: 「KML（標高あり LineString）→地図と断面図に正しく描画。標高補完が走らない」「保存ボタン: KML 読み込み時に...無効。GPX 読み込み時は有効」「国内座標(lat≈35,lon≈135)を使い、入れ替わると地図外になるので回帰検知可能」。"
+        },
+        {
+          "text": "リクエストの言い換えに留まらず、具体的な設計判断（データ構造・処理フロー・関数分割など）を加えている",
+          "passed": true,
+          "evidence": "§3 に5つの load-bearing decision。関数分割: detectRouteFormat / parseKmlCoordinates / extractKmlLineString / extractKmlPoints / parseKml / parseRoute を実コードで提示。処理フロー判断: 「localName フィルタ」採用理由（getElementsByTagName が名前空間で効きにくい）、`{doc:null, points}` で呼び出し側構造を揃え writeElevationsToGpx を doc null でガード、unknown を GPX に倒す理由まで根拠付きで記述。"
+        },
+        {
+          "text": "推奨する実装方針を1つに確定させており（複数案の列挙で終わらず）、主要な技術判断を未解決の論点へ先送りしていない",
+          "passed": true,
+          "evidence": "§3 各決定が単一方針に確定（決定2「リネームせず...新設する」、決定3「{doc:null, points} に統一する」）。代替案は §4.5/§4.2 注記や §9 将来拡張で「非ゴール」として明示的に切り出し、本体方針は確定。localName 方式 vs getElementsByTagNameNS も「localName 方式の方が...書き味が揃う」と一方に決定。§11 で実装順序を9ステップに確定。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "複数 GPX 連結時の距離の通し積算と、各日の境界（区切り／色分け）をどうデータに持たせるかを設計している",
+          "passed": true,
+          "evidence": "D2 で「区間境界インデックス集合 boundaryStarts（各区間の先頭点インデックス）を受け取り、その点では前点との距離・標高差を 0 とみなす」、D3 で stats への segments 配列（label/color/startIndex/endIndex/startKm/endKm/totalKm/ascent/descent/min/maxElevation）を追加。mergePoints が { points, boundaryStarts, segmentMeta } を返す（5.1(b)）。色は D4 の SEGMENT_PALETTE=['#1f77b4',...] を循環。距離の通し積算は『境界では totalMeters に +0、distancesKm は前点と同じ値を積む』と実装イメージ付きで明示。"
+        },
+        {
+          "text": "既存の単一 GPX 表示・地図と断面図の同期挙動を壊さない方針に触れている",
+          "passed": true,
+          "evidence": "DoD に『既存の単一 GPX 読み込み・標高補完・エクスポート（PNG/PDF）・ホバー連動はそのまま動く（後方互換）』。D2『既定（境界指定なし）の挙動は現状と完全一致 → 後方互換・既存テスト不変』。受け入れ基準 E『単一 GPX 読み込みの stats が本変更前後で完全一致』、H『ホバー連動が壊れない（findNearestPointIndex / highlightAtIndex / setChartActiveIndex が連結 latestPoints 上で正しく動く）』。リスク章で『第 3 引数 options = {} を任意にし、未指定時は完全に従来経路』。これらは実コード（renderCharts の onHover が elements[0].index→points[index]、setChartActiveIndex の datasetIndex:0）と整合する具体方針。"
+        },
+        {
+          "text": "影響を受ける実在のコンポーネント（断面図描画・データ読み込み等）をファイル/関数粒度で示している",
+          "passed": true,
+          "evidence": "5章で app.js の computeRouteStats / mergePoints / renderCharts / drawElevationExport / drawSlopeExport / renderAnalysis / renderMap、index.html の #gpx-file/#route-buttons/#merge-list、styles.css、tests/run-tests.mjs を関数・要素 ID 粒度で列挙。drawLine の正確なシグネチャ drawLine(ctx, plot, xs, ys, xMax, yMin, yMax, color, lineWidth) を引用。これらは実ファイル app.js の実関数（line 93,578,701,727,764,810,1065 等）と一致する。"
+        },
+        {
+          "text": "日付/ファイルの並び順の決定方法と、タイムスタンプ欠如など順序が決まらないケースのエッジケースを扱う",
+          "passed": true,
+          "evidence": "D1『並び順はユーザー指定順を正とする』。登録済みボタンは押した順、ファイル入力は『ファイル名の自然順（昇順）localeCompare(b,{numeric:true})』、UI で上下移動も提供。順序が決まらない原因（時刻欠如/不正）を 2.の実データ確認で『時刻は信頼できない: Day1 も Day2 も <time> が 2025-06-23T23:00:00Z から始まる』と根拠付きで示し、エッジケース表でも『GPX の <time> が信頼できない → 時刻ソートは使わない』を再掲。"
+        },
+        {
+          "text": "「3本連結で距離が単調増加し境界が描画される」のような検証可能な受け入れ基準を含む",
+          "passed": true,
+          "evidence": "7章 受け入れ基準 A（連結 totalKm が |stats-(d1+d2)|<0.01km）、B『連結 stats.distancesKm が単調非減少で、Day2 先頭の distancesKm が Day1 末尾と等しい（差 0）』、C（ascent/descent が区間和に一致）、D（segments.length===選択 GPX 数、endKm===次 startKm）。実装手順 6 で『ブラウザで合宿 Day1/Day2/Day3 を連結し…境界に縦区切り線とラベルが出る』を手動確認。5.6 でテスト化（segmentMeters[boundaryIndex]===0 等）。"
+        },
+        {
+          "text": "レビュー可能な小さい単位に割った、順序付きの実装ステップを提示している",
+          "passed": true,
+          "evidence": "8章で 1.コア純粋関数（テスト先行）→2.画面チャート対応→3.印刷用キャンバス→4.UI（複数選択）→5.（任意）routes.json→6.検証→7.ドキュメント の番号付きステップ。『ブランチ: feat/multiday-merge』『1 ブランチ 1 関心事』と明記し、各ステップに具体的なサブタスク（追加する関数・要素）を列挙。テスト先行→描画→UI の順で段階的にレビュー可能。"
+        },
+        {
+          "text": "日境界での距離の積算方法（日をまたぐ地理的ギャップを加算するか否か）という中心的な設計判断を、正しさの観点から明示的に決め切っている（既存関数の再利用で済ませて副作用を見落としていない）",
+          "passed": true,
+          "evidence": "D2 が core を正面から決定: 『computeRouteStats を素朴に呼ぶと Day1 終点→Day2 始点の haversineMeters（別の山域なら数十 km）が 1 セグメントとして距離・傾斜に混入する。これを避けるため…境界点では前点との距離・標高差を 0 とみなす』。実コード（app.js L102-112 の haversineMeters(points[i-1],points[i]) を全点に適用するループ）の副作用を正確に特定し、加算しない（+0）と決め切っている。さらに ascent/descent への寄与 0、slope 0、平滑化を境界で分割（D5）と派生する副作用まで網羅。素朴な既存関数再利用（連結 points をそのまま computeRouteStats に渡す）が誤りである理由を明示しており、まさに『再利用で済ませて副作用を見落とす』失敗を回避している。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "without_skill",
+      "run_number": 2,
+      "result": {
+        "pass_rate": 1,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "複数 GPX 連結時の距離の通し積算と、各日の境界（区切り／色分け）をどうデータに持たせるかを設計している",
+          "passed": true,
+          "evidence": "§4.2 で MergedRoute（points 連結 + boundaries[] + hasGap）と RouteBoundary（startIndex/endIndex/name/shortLabel/color/gapMeters）を typedef で定義。「computeRouteStats が返す distancesKm は index と 1:1 対応するので、boundary.startIndex から distancesKm[startIndex] が即座に取れる」。通し積算は §2「連結済み points を渡すだけで距離は通しで積算される（app.js:106）」。色は §4.3 MULTI_DAY_PALETTE と boundaries[i].color = palette[i % len]。実コードの distancesKm 累積（app.js:105-106）と一致し検証済み。"
+        },
+        {
+          "text": "既存の単一 GPX 表示・地図と断面図の同期挙動を壊さない方針に触れている",
+          "passed": true,
+          "evidence": "§7「analyzeGpxText（app.js:523）を温存」「renderAnalysis(points, boundaries=null) の任意引数で分岐させる…null なら従来描画にフォールバック」。§6.3「findNearestPointIndex（app.js:701）は latestPoints 全体を対象にするので無改修で連結点列に対応。ホバー連動（地図↔グラフ）もそのまま効く」。§13「dataset を分割せず 1 本のままにするのが…index 連動を温存」。findNearestPointIndex が latestPoints を走査することは app.js:705 で検証済み、同期挙動温存の根拠は妥当。"
+        },
+        {
+          "text": "影響を受ける実在のコンポーネント（断面図描画・データ読み込み等）をファイル/関数粒度で示している",
+          "passed": true,
+          "evidence": "§8「ファイル別・関数別の変更一覧」で computeRouteStats(app.js:93)、renderMap(app.js:564)、renderCharts(app.js:578)、drawElevationExport/drawSlopeExport(app.js:764/810)、parseGpx(app.js:55)、fillMissingElevations(app.js:258)、loadRouteLibrary/ボタン生成(app.js:482-521)、change ハンドラ(app.js:449) を列挙。実コードと突合し行番号・関数名・既存色(#1f7a5c renderMap, #d56b1f finish marker app.js:573)が全て一致することを確認。"
+        },
+        {
+          "text": "日付/ファイルの並び順の決定方法と、タイムスタンプ欠如など順序が決まらないケースのエッジケースを扱う",
+          "passed": true,
+          "evidence": "並び順: 登録 GPX は §6.1「結合順 = クリック順」、ローカルは §6.2「ファイル名の昇順で結合」。GPX <time> 自動ソートは §3 やらないことで明示除外。順序が決まらないケース: §6.2/§9「Day 名が抽出できないファイル名→extractDayLabel が セグメント${n} を返す」、§9「各日が複数 trkseg…1 GPX 内の trkseg 間の不連続は本仕様では扱わず」。ただしタイムスタンプ自体は採用せずクリック順/ファイル名順に倒す設計判断で、time 欠如固有の分岐は不要化されている。"
+        },
+        {
+          "text": "「3本連結で距離が単調増加し境界が描画される」のような検証可能な受け入れ基準を含む",
+          "passed": true,
+          "evidence": "§10 受け入れ基準 1「Day1+Day2+Day3 結合で stats.totalKm が各日実距離の合計に一致し gap を含まない」、2「境界 index で distancesKm が直前と同値」、4「boundaries[i].color===MULTI_DAY_PALETTE[i%len]、隣接2日の色が異なる」、7「3色の区間、断面図に2本の境界縦線+Day2/Day3 ラベル」。§11 に実行可能な assert（merged.boundaries[1].startIndex===2、stats.distancesKm[2]===stats.distancesKm[1]、Math.round(stats.ascent)===160）を提示。既存テスト形式（純関数 import + assert）に合致。"
+        },
+        {
+          "text": "レビュー可能な小さい単位に割った、順序付きの実装ステップを提示している",
+          "passed": true,
+          "evidence": "§12 実装ステップ 1-10。1「純関数の追加とテスト先行（extractDayLabel/mergeRoutes/computeRouteStats options）で green に」→2 状態とモード切替→3 解析入口→4 登録 GPX 複数選択 UI→5 ローカル複数ファイル→6 地図色分け→7 断面/傾斜色分け+境界プラグイン→8 エクスポート→9 注意表示→10 lint/typecheck/test/build。純ロジック先行・UI/描画を分離した順序で各ステップが独立レビュー可能。"
+        },
+        {
+          "text": "日境界での距離の積算方法（日をまたぐ地理的ギャップを加算するか否か）という中心的な設計判断を、正しさの観点から明示的に決め切っている（既存関数の再利用で済ませて副作用を見落としていない）",
+          "passed": true,
+          "evidence": "§5「連結境界の扱い（最重要設計判断）」。素朴連結が距離水増し・偽の上昇下降・偽の急傾斜を生む副作用を3点列挙し、computeRouteStats に options.boundaryStartIndices(Set) を追加して「境界 index は前点との区間を距離・上昇下降・傾斜の積算から除外」「rawSlopes.push(0)」する gap-bridge 方式を採用。代替案 A(素朴連結)/B(補間)を却下理由付きで棄却。「options 省略時は従来と完全に同一挙動」で後方互換も担保。app.js:102-111 の差分計算ループに偽傾斜混入リスクが実在することを確認しており、再利用任せの副作用見落としを正しく回避している。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.857,
+        "passed": 6,
+        "failed": 1,
+        "total": 7,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "現状（全て手入力）と新フロー（画像→OCR→フォーム下書き）の差分・スコープ（goals/non-goals）を明確化している",
+          "passed": true,
+          "evidence": "1章で現状『申請者が金額・日付・店名・経費科目などをすべて手入力している』を述べ、新フロー『レシート画像をボットにアップロードすると…自動抽出し、申請フォームの下書きを生成』を定義。『スコープ』節で In Scope（OCR抽出/3項目/Block Kit修正UI等）と Out of Scope（経費科目自動分類=フェーズ対象外、複数レシート=フェーズ2、通貨換算=JPY固定、明細行=合計のみ）を箇条書きで明示。"
+        },
+        {
+          "text": "OCR 抽出のデータモデル（金額／日付／店名 + 信頼度など）と、誤読時に人が確認・修正するフローを設計している",
+          "passed": true,
+          "evidence": "OcrProvider インターフェースが `amount?:{value,currency,confidence}`, `date?:{value(ISO8601),confidence}`, `merchant?:{value,confidence}` を返すと定義。Draft データモデル表に amount/date/merchant/confidence(json)/raw_text/status 列。誤読対応として 4.5 Interaction Handler で『修正する』→現在値プリフィルした Modal、`view_submission` のバリデーション、確信度別（>=0.85 採用 / 0.6-0.85 要確認 / <0.6 空欄）の人手確認フローを設計。"
+        },
+        {
+          "text": "外部 OCR サービスや Slack のファイル/メッセージ API など、コンポーネント間の連携インターフェースを具体化している",
+          "passed": true,
+          "evidence": "Slack 連携: `file_shared` イベント購読、署名検証(X-Slack-Signature/HMAC-SHA256)、`files.info` で `url_private_download` を Bearer トークン付き取得、`chat.postMessage`/`chat.update`/`views.open`/`block_actions`/`view_submission` を具体名で記載。OCR: `OcrProvider.extract(imageBytes,mimeType)` インターフェース＋Document AI/Textract AnalyzeExpense/Azure Receipt の具体プロダクト名。既存API: `ExpenseApiClient.createDraft(draft)->{expense_id}` に draft_id を idempotency key で連携。"
+        },
+        {
+          "text": "低解像度・多通貨・1枚に複数レシート・非レシート画像などのエッジケースとエラー処理を挙げている",
+          "passed": true,
+          "evidence": "6章エッジケース表に『画像が不鮮明/文字なし→全項目空欄+手入力誘導』『通貨が JPY 以外→外貨は手入力が必要と通知』『1メッセージに複数画像→1枚目のみ処理し注記、フェーズ2で全件』『金額複数(小計・税・合計)→合計優先+お釣り/小計除外』『未来日付・極端な過去』『非対応形式』『10MB超過』『OCRプロバイダ障害/タイムアウト→リトライ3回→DLQ→手入力Modal』等を網羅。"
+        },
+        {
+          "text": "抽出精度や人手確認ステップなど、観測可能で検証可能な受け入れ基準を含む",
+          "passed": true,
+          "evidence": "10章 受け入れ基準に『10秒以内に下書きメッセージが届く』『常に3秒以内に200を返しリトライ発生しない』『確信度0.85以上はプリフィル、0.6-0.85は要確認、0.6未満は空欄』『修正するを押すと現在値プリフィルModalが開く』『申請API に1件だけ登録(二重登録なし)』等、観測可能で検証可能な条件を列挙。E2E は『金額完全一致、日付完全一致、店名は正規化後の部分一致』と判定基準を明示。"
+        },
+        {
+          "text": "PII の取り扱い・OCR コスト・誤申請リスクなど、未解決の論点／リスクに言及している",
+          "passed": true,
+          "evidence": "7章で PII/機微情報（画像非永続化・raw_text 保持期間ポリシー・金額/店名はログにマスク or ハッシュ・OCRプロバイダのデータ利用ポリシー/リージョン確認）を扱い、8章で『OCRコスト監視: 呼び出し回数/月次コストのダッシュボード』。誤申請リスクは draft_id idempotency key+『同一画像の申請済み下書きがあります』警告、未来日付の申請時ブロック。12章 未決事項に保持期間/閾値/プロバイダ選定を列挙。"
+        },
+        {
+          "text": "信頼度しきい値・リトライ回数・目標精度などの主要パラメータを具体的な数値で確定しており、「後で調整」「未定」に留めていない",
+          "passed": false,
+          "evidence": "確信度しきい値(0.85/0.6)、最大リトライ3回、可視性タイムアウト30秒、重複排除TTL60秒、サイズ上限10MB、金額上限1,000,000、3秒/10秒応答などは数値確定済み。しかし『目標精度』に相当する数値目標が無い: 8章は OCR成功率/自動採用率/修正率を『代理指標として継続監視』『改善に使う』と述べるのみで目標値(SLO)を設定せず、E2E も『期待値と一致』とするだけで合格ラインの数値(例: フィールド一致率N%以上)が無い。12章 未決事項に『金額上限などのバリデーション閾値の社内ポリシー値』が残り一部閾値は未確定。"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "without_skill",
+      "run_number": 2,
+      "result": {
+        "pass_rate": 1,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 0.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "現状（全て手入力）と新フロー（画像→OCR→フォーム下書き）の差分・スコープ（goals/non-goals）を明確化している",
+          "passed": true,
+          "evidence": "0章「現状は申請者が金額・日付・店名を全項目手入力している」「レシート画像を Slack にアップロード → OCR で...抽出 → 申請フォームに下書きを生成し、申請者が確認・修正のうえ送信」。1.2 ゴール(4項目)と1.3 ノンゴール(勘定科目推定/バッチ/税区分/規程違反チェック/複雑帳票の5項目)を明示。"
+        },
+        {
+          "text": "OCR 抽出のデータモデル（金額／日付／店名 + 信頼度など）と、誤読時に人が確認・修正するフローを設計している",
+          "passed": true,
+          "evidence": "3.4 extract_receipt input_schema に amount/amount_confidence, date/date_confidence, merchant/merchant_confidence, currency。4章 receipt_drafts テーブルが同構造を保持。誤読時フローは3.5「各フィールドを編集可能」「確信度<0.6 のフィールドは⚠️要確認」「Modal(views.open)で...プレフィル」、3.6 で確認・修正→確定。"
+        },
+        {
+          "text": "外部 OCR サービスや Slack のファイル/メッセージ API など、コンポーネント間の連携インターフェースを具体化している",
+          "passed": true,
+          "evidence": "Slack: POST /slack/events, X-Slack-Signature/Timestamp 署名検証, file_shared, files.info の url_private_download を Authorization: Bearer <bot_token> で取得, chat.postMessage/postEphemeral, views.open, view_submission(POST /slack/interactivity)。OCR: Google Cloud Vision(Document Text Detection)/Textract/Azure を表で比較。抽出: Claude Tool Use tool_choice 強制。経費: POST /api/expenses を Idempotency-Key 付きで呼ぶ。"
+        },
+        {
+          "text": "低解像度・多通貨・1枚に複数レシート・非レシート画像などのエッジケースとエラー処理を挙げている",
+          "passed": true,
+          "evidence": "6章エッジケース表: OCRテキスト空(ピンボケ/真っ黒=低解像度), 外貨レシート(USD等→currency記録・要確認), 非対応ファイル(動画/zip→フィルタ), 巨大>10MB, HEIC, PDF複数ページ, 429レート制限(指数バックオフ), 401, 不正JSON。3.2 で最大3回リトライ・DLQ・手入力フォールバック。注: 『1枚の画像に複数レシート』は単独エッジケースとして明示されておらず、複数レシートは『1メッセージ1レシートを基本』のノンゴール扱い止まりだが、低解像度・多通貨・非レシートと包括的なエラー処理は具体列挙されている。"
+        },
+        {
+          "text": "抽出精度や人手確認ステップなど、観測可能で検証可能な受け入れ基準を含む",
+          "passed": true,
+          "evidence": "8章受け入れ基準(テスト可能): #8 ゴールデンセット100件で金額95%/日付90%/店名85%以上、#1 3秒以内ACK、#3 低確信度・空欄が『要確認』表示(人手確認)、#9 p50≤8秒/p95≤20秒、#10 署名検証失敗は401。テスト戦略にユニット/ゴールデンセット評価ハーネス(CI)/統合E2E/障害注入を明記。"
+        },
+        {
+          "text": "PII の取り扱い・OCR コスト・誤申請リスクなど、未解決の論点／リスクに言及している",
+          "passed": true,
+          "evidence": "7章: データ機微性(レシート/OCR全文=機微情報)→暗号化・アクセス限定・自動パージ、外部送信の明示と社内承認(導入前確認事項)、ログに機微情報を残さない。コスト: 3.4 プロンプトキャッシュ・第2パス限定、9章メトリクスにコスト。誤申請リスク: 3.4『LLM出力を信用しすぎない』範囲検証・要確認表示・監査ログ差分追跡。11章にオープンな確認事項(外部送信可否/保持期間/予算)。"
+        },
+        {
+          "text": "信頼度しきい値・リトライ回数・目標精度などの主要パラメータを具体的な数値で確定しており、「後で調整」「未定」に留めていない",
+          "passed": true,
+          "evidence": "信頼度しきい値=0.6(3.4 フォールバック・3.5 要確認)、リトライ=最大3回(3.2)、目標精度=金額95%/日付90%/店名85%(1.4・8)。加えて p50 8秒/p95 20秒、Worker並行5、金額範囲1〜1,000,000、保持90日、タイムスタンプ±5分、サイズ上限10MB、リサイズ2000px、max_tokens 1024。注: モデルID claude-haiku-4-5 と OCRプロバイダは意図的に実装時確定のプレースホルダ扱いだが、設問が挙げる主要パラメータ(しきい値/リトライ/目標精度)はいずれも数値で確定済み。"
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 0.9762,
+        "stddev": 0.0584,
+        "min": 0.857,
+        "max": 1
+      },
+      "time_seconds": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "tokens": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 0.9762,
+        "stddev": 0.0584,
+        "min": 0.857,
+        "max": 1
+      },
+      "time_seconds": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0.0,
+        "max": 0.0
+      },
+      "tokens": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    "delta": {
+      "pass_rate": "+0.00",
+      "time_seconds": "+0.0",
+      "tokens": "+0"
+    }
+  },
+  "notes": [
+    "Overall assertion pass rate — with_skill 98% ± 6% vs baseline 98% ± 6% (delta +0.00).",
+    "Blind A/B (judge not told which is which): with_skill won 2, baseline won 1, ties 0.",
+    "    - kml-import: blind winner=without_skill (with_skill 8.4 vs baseline 8.9)",
+    "    - multiday-merge: blind winner=with_skill (with_skill 9.0 vs baseline 8.0)",
+    "    - expense-ocr-bot: blind winner=with_skill (with_skill 9.0 vs baseline 7.5)",
+    "Non-discriminating assertions (same pass rate both configs — may not test skill value):",
+    "    - [100%==100%] 現状（GPX のみ対応）に触れ、KML 追加後も GPX の既存挙動を壊さないという制約を明示している",
+    "    - [100%==100%] app.js / index.html など実在するファイル・コンポーネント単位で、何を追加・変更するかを具体的に示して…",
+    "    - [100%==100%] KML をパースして GPX と共通の内部データ構造（ルート点・標高など）へ正規化する方針を設計している",
+    "    - [100%==100%] 標高が無い KML・座標のみ・不正な拡張子など、入力の欠損／異常系のエッジケースとその扱いを挙げている",
+    "    - [100%==100%] 「正しく動く」ではなく観測可能な振る舞いで書かれた、検証可能な受け入れ基準（テスト観点）を含む",
+    "    - [100%==100%] リクエストの言い換えに留まらず、具体的な設計判断（データ構造・処理フロー・関数分割など）を加えている",
+    "    - [100%==100%] 推奨する実装方針を1つに確定させており（複数案の列挙で終わらず）、主要な技術判断を未解決の論点へ先送りしていない",
+    "    - [100%==100%] 複数 GPX 連結時の距離の通し積算と、各日の境界（区切り／色分け）をどうデータに持たせるかを設計している",
+    "    - [100%==100%] 既存の単一 GPX 表示・地図と断面図の同期挙動を壊さない方針に触れている",
+    "    - [100%==100%] 影響を受ける実在のコンポーネント（断面図描画・データ読み込み等）をファイル/関数粒度で示している",
+    "    - [100%==100%] 日付/ファイルの並び順の決定方法と、タイムスタンプ欠如など順序が決まらないケースのエッジケースを扱う",
+    "    - [100%==100%] 「3本連結で距離が単調増加し境界が描画される」のような検証可能な受け入れ基準を含む",
+    "    - [100%==100%] レビュー可能な小さい単位に割った、順序付きの実装ステップを提示している",
+    "    - [100%==100%] 日境界での距離の積算方法（日をまたぐ地理的ギャップを加算するか否か）という中心的な設計判断を、正しさの観点から明示的に決…",
+    "    - [100%==100%] 現状（全て手入力）と新フロー（画像→OCR→フォーム下書き）の差分・スコープ（goals/non-goals）を明確化し…",
+    "    - [100%==100%] OCR 抽出のデータモデル（金額／日付／店名 + 信頼度など）と、誤読時に人が確認・修正するフローを設計している",
+    "    - [100%==100%] 外部 OCR サービスや Slack のファイル/メッセージ API など、コンポーネント間の連携インターフェースを具体…",
+    "    - [100%==100%] 低解像度・多通貨・1枚に複数レシート・非レシート画像などのエッジケースとエラー処理を挙げている",
+    "    - [100%==100%] 抽出精度や人手確認ステップなど、観測可能で検証可能な受け入れ基準を含む",
+    "    - [100%==100%] PII の取り扱い・OCR コスト・誤申請リスクなど、未解決の論点／リスクに言及している",
+    "    - [50%==50%] 信頼度しきい値・リトライ回数・目標精度などの主要パラメータを具体的な数値で確定しており、「後で調整」「未定」に留めていな…"
+  ]
+}
