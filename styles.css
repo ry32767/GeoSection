@@ -208,12 +208,13 @@ button:disabled {
 }
 
 .map-search {
+  position: relative;
   display: flex;
   flex: 1 1 280px;
   gap: 8px;
 }
 
-.map-search input[type="search"] {
+.map-search input[type="text"] {
   flex: 1;
   min-width: 0;
   min-height: 42px;
@@ -221,7 +222,46 @@ button:disabled {
   border-radius: 6px;
   background: #fff;
   color: var(--text);
+  -webkit-text-fill-color: var(--text);
+  font-size: 0.95rem;
   padding: 8px 10px;
+}
+
+.place-results {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1200;
+  max-height: 280px;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  box-shadow: var(--shadow);
+}
+
+.place-results li {
+  padding: 8px 10px;
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.9rem;
+  line-height: 1.3;
+  cursor: pointer;
+}
+
+.place-results li:hover,
+.place-results li[aria-selected="true"] {
+  background: var(--surface-soft);
+}
+
+.place-results .place-sub {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 #pick-toggle[aria-pressed="true"] {
@@ -354,6 +394,8 @@ select {
 }
 
 .map-panel {
+  position: relative;
+  z-index: 0;
   min-height: 680px;
   overflow: hidden;
   border: 1px solid var(--line);
@@ -390,6 +432,19 @@ select {
   color: var(--muted);
   font-size: 0.82rem;
   text-align: right;
+}
+
+.title-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.title-controls select {
+  width: auto;
+  min-height: 34px;
+  padding: 4px 8px;
+  font-size: 0.82rem;
 }
 
 canvas {
