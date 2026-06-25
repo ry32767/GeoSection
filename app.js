@@ -363,6 +363,7 @@ function boot() {
   const slopeCanvas = document.querySelector("#slope-chart");
   const elevationNote = document.querySelector("#elevation-note");
   const slopeNote = document.querySelector("#slope-note");
+  const slopeModeInput = document.querySelector("#slope-mode");
   const metrics = {
     distance: document.querySelector("#metric-distance"),
     ascent: document.querySelector("#metric-ascent"),
@@ -447,6 +448,13 @@ function boot() {
         renderExportCanvases();
       }
     });
+  });
+
+  slopeModeInput.addEventListener("change", () => {
+    if (latestStats && latestPoints) {
+      renderCharts(latestStats.distancesKm.map((km) => km.toFixed(2)), latestStats, latestPoints);
+      renderExportCanvases();
+    }
   });
 
   exportElevationButton.addEventListener("click", () => {
@@ -763,6 +771,18 @@ function boot() {
     map.fitBounds(routeLayer.getBounds(), { padding: [28, 28] });
   }
 
+  // 傾斜図の表示系列。トグルで「傾斜角（度）」と「勾配（％ = tan×100）」を切り替える。
+  function getSlopeSeries(stats) {
+    if (slopeModeInput.value === "grade") {
+      return {
+        values: stats.slopes.map((deg) => Math.tan((deg * Math.PI) / 180) * 100),
+        axisTitle: "勾配 [%]",
+        label: "勾配",
+      };
+    }
+    return { values: stats.slopes, axisTitle: "傾斜角 [度]", label: "傾斜角" };
+  }
+
   function renderCharts(labels, stats, points) {
     const colors = getGraphColors();
     const chartOptions = (unit, color) => ({
@@ -820,12 +840,13 @@ function boot() {
         },
       ],
     };
+    const slope = getSlopeSeries(stats);
     const slopeData = {
       labels,
       datasets: [
         {
-          label: "傾斜角",
-          data: stats.slopes.map((value) => Math.round(value * 10) / 10),
+          label: slope.label,
+          data: slope.values.map((value) => Math.round(value * 10) / 10),
           borderColor: colors.slope,
           backgroundColor: colorWithAlpha(colors.slope, 0.12),
           fill: true,
@@ -850,7 +871,7 @@ function boot() {
     slopeChart = new Chart(slopeCanvas, {
       type: "line",
       data: slopeData,
-      options: chartOptions("傾斜角 [度]", colors.slope),
+      options: chartOptions(slope.axisTitle, colors.slope),
       plugins: [selectionMarkerPlugin],
     });
   }
@@ -1002,15 +1023,16 @@ function boot() {
     const height = canvas.height;
     const layout = getSlopeExportLayout(width, height, options.marginPercent);
     const { plot } = layout;
-    const yAxis = getAutoSlopeAxis(stats.slopes);
+    const slope = getSlopeSeries(stats);
+    const yAxis = getAutoSlopeAxis(slope.values);
     const xMax = Math.max(1, getNiceCeil(stats.totalKm, getNiceTickStep(stats.totalKm, 12)));
 
     drawWhitePage(ctx, width, height);
-    drawPlotFrame(ctx, plot, xMax, yAxis.min, yAxis.max, "距離 [km]", "傾斜角 [度]", { yStep: yAxis.step });
+    drawPlotFrame(ctx, plot, xMax, yAxis.min, yAxis.max, "距離 [km]", slope.axisTitle, { yStep: yAxis.step });
     const zeroY = mapValue(0, yAxis.min, yAxis.max, plot.bottom, plot.top);
     drawLineSegment(ctx, plot.left, zeroY, plot.right, zeroY, "#333", 1, [2, 3]);
-    drawLine(ctx, plot, stats.distancesKm, stats.slopes, xMax, yAxis.min, yAxis.max, options.slopeColor, layout.lineWidth);
-    drawCenteredText(ctx, "傾斜角", width / 2, plot.top - 18, 18, "#000");
+    drawLine(ctx, plot, stats.distancesKm, slope.values, xMax, yAxis.min, yAxis.max, options.slopeColor, layout.lineWidth);
+    drawCenteredText(ctx, slope.label, width / 2, plot.top - 18, 18, "#000");
   }
 
   function formatScaleDenominator(value) {
@@ -1441,6 +1463,7 @@ function boot() {
     exportExaggerationInput.disabled = isBusy;
     elevationColorInput.disabled = isBusy;
     slopeColorInput.disabled = isBusy;
+    slopeModeInput.disabled = isBusy;
     pageMarginInput.disabled = isBusy;
     previewScaleInput.disabled = isBusy;
     exportFormatInput.disabled = isBusy;

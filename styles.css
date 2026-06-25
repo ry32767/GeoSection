@@ -392,6 +392,19 @@ select {
   text-align: right;
 }
 
+.title-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.title-controls select {
+  width: auto;
+  min-height: 34px;
+  padding: 4px 8px;
+  font-size: 0.82rem;
+}
+
 canvas {
   width: 100% !important;
   height: 270px !important;
