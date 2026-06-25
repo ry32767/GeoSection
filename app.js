@@ -339,6 +339,11 @@ function boot() {
   const smoothingOutput = document.querySelector("#smoothing-output");
   const downloadButton = document.querySelector("#download-gpx");
   const fitMapButton = document.querySelector("#fit-map");
+  const placeSearchInput = document.querySelector("#place-search");
+  const placeSearchButton = document.querySelector("#place-search-button");
+  const pickToggleButton = document.querySelector("#pick-toggle");
+  const pickClearButton = document.querySelector("#pick-clear");
+  const mapPickNote = document.querySelector("#map-pick-note");
   const paperSizeInput = document.querySelector("#paper-size");
   const exportExaggerationInput = document.querySelector("#export-exaggeration");
   const exportExaggerationOutput = document.querySelector("#export-exaggeration-output");
@@ -375,6 +380,10 @@ function boot() {
   let latestParsed = null;
   let latestStats = null;
   let latestPoints = null;
+  let pickMode = false;
+  let pickStart = null;
+  let pickLayer = null;
+  let searchMarker = null;
 
   const map = L.map("map", { scrollWheelZoom: true }).setView([35.6812, 139.7671], 6);
   // 地形図（国土地理院 標準地図）。日本の山岳の等高線・地形が読み取りやすい。
@@ -398,6 +407,8 @@ function boot() {
     highlightAtIndex(index);
   });
   map.on("mouseout", clearHighlight);
+  // 2点選択モードでは、地図クリックで断面図の始点・終点を指定する。
+  map.on("click", handleMapClick);
 
   for (const canvas of [elevationCanvas, slopeCanvas]) {
     canvas.addEventListener("mouseleave", clearHighlight);
@@ -479,6 +490,31 @@ function boot() {
     if (routeLayer) map.fitBounds(routeLayer.getBounds(), { padding: [28, 28] });
   });
 
+  placeSearchButton.addEventListener("click", handlePlaceSearch);
+  placeSearchInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      handlePlaceSearch();
+    }
+  });
+
+  pickToggleButton.addEventListener("click", () => {
+    if (pickMode) {
+      setPickMode(false);
+    } else {
+      clearPickSelection();
+      setPickMode(true);
+    }
+  });
+
+  pickClearButton.addEventListener("click", () => {
+    clearPickSelection();
+    if (pickMode) {
+      updateStatus("地図で1点目をクリックしてください。");
+      mapPickNote.textContent = "1点目を選択";
+    }
+  });
+
   async function loadRouteLibrary() {
     try {
       const response = await fetch("./data/routes.json", { cache: "no-store" });
@@ -545,6 +581,158 @@ function boot() {
     exportElevationButton.disabled = false;
     exportSlopeButton.disabled = false;
     updateStatus("解析が完了しました。");
+  }
+
+  // 住所・地名を検索して地図を移動する。日本は国土地理院、海外は OSM Nominatim。
+  async function handlePlaceSearch() {
+    const query = placeSearchInput.value.trim();
+    if (!query) return;
+    placeSearchButton.disabled = true;
+    updateStatus(`「${query}」を検索しています。`);
+    try {
+      const result = await geocodePlace(query);
+      if (!result) {
+        updateStatus(`「${query}」に一致する場所が見つかりませんでした。`);
+        return;
+      }
+      map.setView([result.lat, result.lon], 14);
+      if (searchMarker) searchMarker.remove();
+      searchMarker = L.circleMarker([result.lat, result.lon], {
+        radius: 8,
+        color: "#1d4ed8",
+        fillColor: "#3b82f6",
+        fillOpacity: 0.9,
+        weight: 2,
+      }).addTo(map);
+      searchMarker.bindPopup(result.label || query).openPopup();
+      updateStatus(`「${result.label || query}」へ移動しました。地図で2点を選ぶと断面図を作成できます。`);
+    } catch (error) {
+      console.error(error);
+      updateStatus("場所の検索に失敗しました。ネットワークを確認してください。");
+    } finally {
+      placeSearchButton.disabled = false;
+    }
+  }
+
+  async function geocodePlace(query) {
+    // 国土地理院の住所検索（日本の地名・住所に強い）。
+    try {
+      const response = await fetch(`https://msearch.gsi.go.jp/address-search/AddressSearch?q=${encodeURIComponent(query)}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const [lon, lat] = data[0].geometry.coordinates;
+          return { lat, lon, label: data[0].properties?.title ?? query };
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    }
+    // 海外などは OpenStreetMap Nominatim にフォールバック。
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (Array.isArray(data) && data.length > 0) {
+      return { lat: Number.parseFloat(data[0].lat), lon: Number.parseFloat(data[0].lon), label: data[0].display_name };
+    }
+    return null;
+  }
+
+  function setPickMode(on) {
+    pickMode = on;
+    pickToggleButton.setAttribute("aria-pressed", String(on));
+    pickToggleButton.textContent = on ? "選択中（地図をクリック）" : "2点選択を開始";
+    document.querySelector("#map").classList.toggle("picking", on);
+    if (on) {
+      updateStatus("地図で1点目をクリックしてください。");
+      mapPickNote.textContent = "1点目を選択";
+    } else {
+      mapPickNote.textContent = "住所検索 / 地図で2点クリック";
+    }
+  }
+
+  function clearPickSelection() {
+    pickStart = null;
+    if (pickLayer) {
+      pickLayer.remove();
+      pickLayer = null;
+    }
+    pickClearButton.disabled = true;
+  }
+
+  function drawPickPoints(start, end) {
+    if (pickLayer) pickLayer.remove();
+    const markers = [
+      L.circleMarker([start.lat, start.lon], { radius: 6, color: "#0f5c43", fillColor: "#fff", fillOpacity: 1, weight: 3 }),
+    ];
+    if (end) {
+      markers.push(L.circleMarker([end.lat, end.lon], { radius: 6, color: "#d56b1f", fillColor: "#fff", fillOpacity: 1, weight: 3 }));
+      markers.push(L.polyline([[start.lat, start.lon], [end.lat, end.lon]], { color: "#d56b1f", weight: 3, dashArray: "6 5" }));
+    }
+    pickLayer = L.featureGroup(markers).addTo(map);
+  }
+
+  async function handleMapClick(event) {
+    if (!pickMode) return;
+    const point = { lat: event.latlng.lat, lon: event.latlng.lng };
+    if (!pickStart) {
+      pickStart = point;
+      drawPickPoints(point);
+      pickClearButton.disabled = false;
+      updateStatus("地図で2点目をクリックしてください。");
+      mapPickNote.textContent = "2点目を選択";
+      return;
+    }
+    const start = pickStart;
+    const end = point;
+    pickStart = null;
+    setPickMode(false);
+    drawPickPoints(start, end);
+    await analyzeMapSection(start, end);
+  }
+
+  // 2点間を直線補間してサンプル点を作り、標高を補完して断面図を生成する。
+  async function analyzeMapSection(start, end) {
+    const distanceMeters = haversineMeters(start, end);
+    if (distanceMeters < 5) {
+      updateStatus("2点が近すぎます。離れた2点を選んでください。");
+      clearPickSelection();
+      return;
+    }
+    setBusy(true);
+    try {
+      const count = clamp(Math.round(distanceMeters / 50), 25, 300);
+      const latlngs = interpolateLine(start, end, count);
+      const gpxText = buildGpxFromLatLngs(latlngs);
+      clearRouteSelection();
+      fileInput.value = "";
+      await analyzeGpxText(gpxText, "map-section");
+      updateStatus(`地図上の2点（約 ${(distanceMeters / 1000).toFixed(2)} km）から断面図を作成しました。`);
+    } catch (error) {
+      console.error(error);
+      updateStatus(error.message || "断面図の作成に失敗しました。標高 API の状態を確認してください。");
+    } finally {
+      setBusy(false);
+      clearPickSelection();
+    }
+  }
+
+  function interpolateLine(start, end, count) {
+    const points = [];
+    const steps = Math.max(1, count - 1);
+    for (let i = 0; i < count; i += 1) {
+      const t = i / steps;
+      points.push({
+        lat: start.lat + (end.lat - start.lat) * t,
+        lon: start.lon + (end.lon - start.lon) * t,
+      });
+    }
+    return points;
+  }
+
+  function buildGpxFromLatLngs(latlngs) {
+    const trackPoints = latlngs.map((point) => `<trkpt lat="${point.lat}" lon="${point.lon}"></trkpt>`).join("");
+    return `<?xml version="1.0" encoding="UTF-8"?><gpx version="1.1" creator="GeoSection"><trk><name>map-section</name><trkseg>${trackPoints}</trkseg></trk></gpx>`;
   }
 
   function renderAnalysis(points) {
@@ -1258,6 +1446,10 @@ function boot() {
     exportFormatInput.disabled = isBusy;
     exportElevationButton.disabled = isBusy || !latestStats;
     exportSlopeButton.disabled = isBusy || !latestStats;
+    placeSearchInput.disabled = isBusy;
+    placeSearchButton.disabled = isBusy;
+    pickToggleButton.disabled = isBusy;
+    pickClearButton.disabled = isBusy || (!pickStart && !pickLayer);
     routeButtons.querySelectorAll("button").forEach((button) => {
       button.disabled = isBusy;
     });
