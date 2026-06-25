@@ -344,6 +344,7 @@ function boot() {
   const pickToggleButton = document.querySelector("#pick-toggle");
   const pickClearButton = document.querySelector("#pick-clear");
   const mapPickNote = document.querySelector("#map-pick-note");
+  const placeResults = document.querySelector("#place-results");
   const paperSizeInput = document.querySelector("#paper-size");
   const exportExaggerationInput = document.querySelector("#export-exaggeration");
   const exportExaggerationOutput = document.querySelector("#export-exaggeration-output");
@@ -498,12 +499,28 @@ function boot() {
     if (routeLayer) map.fitBounds(routeLayer.getBounds(), { padding: [28, 28] });
   });
 
-  placeSearchButton.addEventListener("click", handlePlaceSearch);
+  let placeSearchTimer = null;
+  placeSearchInput.addEventListener("input", () => {
+    const query = placeSearchInput.value.trim();
+    window.clearTimeout(placeSearchTimer);
+    if (query.length < 2) {
+      hidePlaceResults();
+      return;
+    }
+    placeSearchTimer = window.setTimeout(() => loadPlaceResults(query), 300);
+  });
   placeSearchInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
-      handlePlaceSearch();
+      submitPlaceSearch();
+    } else if (event.key === "Escape") {
+      hidePlaceResults();
     }
+  });
+  placeSearchButton.addEventListener("click", submitPlaceSearch);
+  // 検索ボックスの外をクリックしたら候補を閉じる。
+  document.addEventListener("click", (event) => {
+    if (!event.target.closest(".map-search")) hidePlaceResults();
   });
 
   pickToggleButton.addEventListener("click", () => {
@@ -591,59 +608,130 @@ function boot() {
     updateStatus("解析が完了しました。");
   }
 
-  // 住所・地名を検索して地図を移動する。日本は国土地理院、海外は OSM Nominatim。
-  async function handlePlaceSearch() {
+  // 入力が「緯度, 経度」の形式ならその座標を返す（緯度経度入力に対応）。
+  function parseLatLon(text) {
+    const match = text.trim().match(/^(-?\d+(?:\.\d+)?)\s*[,\s]\s*(-?\d+(?:\.\d+)?)$/);
+    if (!match) return null;
+    const lat = Number.parseFloat(match[1]);
+    const lon = Number.parseFloat(match[2]);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+    return { lat, lon };
+  }
+
+  // 候補地のリストを取得する。座標 → 国土地理院（日本）→ OSM Nominatim（海外）。
+  async function geocodeCandidates(query) {
+    const coords = parseLatLon(query);
+    if (coords) {
+      return [{ lat: coords.lat, lon: coords.lon, label: `緯度 ${coords.lat}, 経度 ${coords.lon}`, sub: "この座標へ移動" }];
+    }
+    try {
+      const response = await fetch(`https://msearch.gsi.go.jp/address-search/AddressSearch?q=${encodeURIComponent(query)}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (Array.isArray(data) && data.length > 0) {
+          return data.slice(0, 6).map((item) => {
+            const [lon, lat] = item.geometry.coordinates;
+            return { lat, lon, label: item.properties?.title ?? query, sub: `${lat.toFixed(5)}, ${lon.toFixed(5)}` };
+          });
+        }
+      }
+    } catch (error) {
+      console.error(error);
+    }
+    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=6&q=${encodeURIComponent(query)}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data)) {
+        return data.map((item) => ({
+          lat: Number.parseFloat(item.lat),
+          lon: Number.parseFloat(item.lon),
+          label: item.display_name,
+          sub: item.type ?? "",
+        }));
+      }
+    }
+    return [];
+  }
+
+  // 入力に応じて候補リストを表示する（Google マップ風の候補選択）。
+  async function loadPlaceResults(query) {
+    try {
+      const candidates = await geocodeCandidates(query);
+      if (placeSearchInput.value.trim() !== query) return; // 入力が変わっていたら破棄
+      renderPlaceResults(candidates);
+      if (candidates.length === 0) updateStatus(`「${query}」に一致する場所が見つかりませんでした。`);
+    } catch (error) {
+      console.error(error);
+    }
+  }
+
+  function renderPlaceResults(candidates) {
+    placeResults.textContent = "";
+    if (candidates.length === 0) {
+      placeResults.hidden = true;
+      return;
+    }
+    candidates.forEach((candidate) => {
+      const item = document.createElement("li");
+      item.setAttribute("role", "option");
+      const title = document.createElement("span");
+      title.textContent = candidate.label;
+      item.append(title);
+      if (candidate.sub) {
+        const sub = document.createElement("span");
+        sub.className = "place-sub";
+        sub.textContent = candidate.sub;
+        item.append(sub);
+      }
+      item.addEventListener("click", () => selectPlace(candidate));
+      placeResults.append(item);
+    });
+    placeResults.hidden = false;
+  }
+
+  function hidePlaceResults() {
+    placeResults.hidden = true;
+    placeResults.textContent = "";
+  }
+
+  function selectPlace(candidate) {
+    hidePlaceResults();
+    placeSearchInput.value = candidate.label;
+    map.setView([candidate.lat, candidate.lon], 14);
+    if (searchMarker) searchMarker.remove();
+    searchMarker = L.circleMarker([candidate.lat, candidate.lon], {
+      radius: 8,
+      color: "#1d4ed8",
+      fillColor: "#3b82f6",
+      fillOpacity: 0.9,
+      weight: 2,
+    }).addTo(map);
+    searchMarker.bindPopup(candidate.label).openPopup();
+    updateStatus(`「${candidate.label}」へ移動しました。地図で2点を選ぶと断面図を作成できます。`);
+  }
+
+  // 検索ボタン / Enter: 最有力の候補（座標ならその点）へ移動する。
+  async function submitPlaceSearch() {
     const query = placeSearchInput.value.trim();
     if (!query) return;
+    window.clearTimeout(placeSearchTimer);
     placeSearchButton.disabled = true;
     updateStatus(`「${query}」を検索しています。`);
     try {
-      const result = await geocodePlace(query);
-      if (!result) {
+      const candidates = await geocodeCandidates(query);
+      if (candidates.length === 0) {
+        hidePlaceResults();
         updateStatus(`「${query}」に一致する場所が見つかりませんでした。`);
         return;
       }
-      map.setView([result.lat, result.lon], 14);
-      if (searchMarker) searchMarker.remove();
-      searchMarker = L.circleMarker([result.lat, result.lon], {
-        radius: 8,
-        color: "#1d4ed8",
-        fillColor: "#3b82f6",
-        fillOpacity: 0.9,
-        weight: 2,
-      }).addTo(map);
-      searchMarker.bindPopup(result.label || query).openPopup();
-      updateStatus(`「${result.label || query}」へ移動しました。地図で2点を選ぶと断面図を作成できます。`);
+      selectPlace(candidates[0]);
     } catch (error) {
       console.error(error);
       updateStatus("場所の検索に失敗しました。ネットワークを確認してください。");
     } finally {
       placeSearchButton.disabled = false;
     }
-  }
-
-  async function geocodePlace(query) {
-    // 国土地理院の住所検索（日本の地名・住所に強い）。
-    try {
-      const response = await fetch(`https://msearch.gsi.go.jp/address-search/AddressSearch?q=${encodeURIComponent(query)}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          const [lon, lat] = data[0].geometry.coordinates;
-          return { lat, lon, label: data[0].properties?.title ?? query };
-        }
-      }
-    } catch (error) {
-      console.error(error);
-    }
-    // 海外などは OpenStreetMap Nominatim にフォールバック。
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`);
-    if (!response.ok) return null;
-    const data = await response.json();
-    if (Array.isArray(data) && data.length > 0) {
-      return { lat: Number.parseFloat(data[0].lat), lon: Number.parseFloat(data[0].lon), label: data[0].display_name };
-    }
-    return null;
   }
 
   function setPickMode(on) {

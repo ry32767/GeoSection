@@ -143,8 +143,9 @@
             </div>
             <div class="map-tools-row">
               <div class="map-search">
-                <input id="place-search" type="search" placeholder="住所・地名で検索（例: 富士山）" aria-label="場所を検索" />
+                <input id="place-search" type="text" placeholder="住所・地名・緯度経度で検索（例: 富士山 / 35.36, 138.73）" aria-label="場所を検索" autocomplete="off" />
                 <button id="place-search-button" type="button">検索</button>
+                <ul id="place-results" class="place-results" role="listbox" hidden></ul>
               </div>
               <div class="actions">
                 <button id="pick-toggle" type="button" aria-pressed="false">2点選択を開始</button>
@@ -186,6 +187,6 @@
     <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
-    <script type="module" src="./app.js?v=20260625-slope-toggle"></script>
+    <script type="module" src="./app.js?v=20260625-search-enhance"></script>
   </body>
 </html>
