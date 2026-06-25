@@ -619,36 +619,21 @@ function boot() {
     return { lat, lon };
   }
 
-  // 候補地のリストを取得する。座標 → 国土地理院（日本）→ OSM Nominatim（海外）。
+  // 候補地のリストを取得する。地図（国土地理院タイル）は日本のみ対応のため、
+  // 地名検索も国土地理院の住所検索（日本国内）に限定する。緯度経度入力は別扱い。
   async function geocodeCandidates(query) {
     const coords = parseLatLon(query);
     if (coords) {
       return [{ lat: coords.lat, lon: coords.lon, label: `緯度 ${coords.lat}, 経度 ${coords.lon}`, sub: "この座標へ移動" }];
     }
-    try {
-      const response = await fetch(`https://msearch.gsi.go.jp/address-search/AddressSearch?q=${encodeURIComponent(query)}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (Array.isArray(data) && data.length > 0) {
-          return data.slice(0, 6).map((item) => {
-            const [lon, lat] = item.geometry.coordinates;
-            return { lat, lon, label: item.properties?.title ?? query, sub: `${lat.toFixed(5)}, ${lon.toFixed(5)}` };
-          });
-        }
-      }
-    } catch (error) {
-      console.error(error);
-    }
-    const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=6&q=${encodeURIComponent(query)}`);
+    const response = await fetch(`https://msearch.gsi.go.jp/address-search/AddressSearch?q=${encodeURIComponent(query)}`);
     if (response.ok) {
       const data = await response.json();
-      if (Array.isArray(data)) {
-        return data.map((item) => ({
-          lat: Number.parseFloat(item.lat),
-          lon: Number.parseFloat(item.lon),
-          label: item.display_name,
-          sub: item.type ?? "",
-        }));
+      if (Array.isArray(data) && data.length > 0) {
+        return data.slice(0, 6).map((item) => {
+          const [lon, lat] = item.geometry.coordinates;
+          return { lat, lon, label: item.properties?.title ?? query, sub: `${lat.toFixed(5)}, ${lon.toFixed(5)}` };
+        });
       }
     }
     return [];
