@@ -227,6 +227,15 @@ button:disabled {
   padding: 8px 10px;
 }
 
+/* 検索バーの文字色を確実に濃色にする（UA やオートフィルでの白文字化を防ぐ）。 */
+#place-search {
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  background: #fff;
+  opacity: 1;
+}
+
 .place-results {
   position: absolute;
   top: calc(100% + 4px);
