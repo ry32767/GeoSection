@@ -193,6 +193,8 @@ button:disabled {
 }
 
 .map-tools {
+  position: relative;
+  z-index: 2;
   padding: 14px;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -229,11 +231,11 @@ button:disabled {
 
 /* 検索バーの文字色を確実に濃色にする（UA やオートフィルでの白文字化を防ぐ）。 */
 #place-search {
-  color: var(--text);
-  -webkit-text-fill-color: var(--text);
-  caret-color: var(--text);
-  background: #fff;
-  opacity: 1;
+  color: #17211c !important;
+  -webkit-text-fill-color: #17211c !important;
+  caret-color: #17211c !important;
+  background-color: #ffffff !important;
+  opacity: 1 !important;
 }
 
 .place-results {
