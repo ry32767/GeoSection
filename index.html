@@ -56,6 +56,23 @@
         <div id="route-buttons" class="route-buttons"></div>
       </section>
 
+      <section class="map-tools" aria-label="地図から断面図">
+        <div class="panel-title">
+          <h2>地図から断面図</h2>
+          <span id="map-pick-note">住所検索 / 地図で2点クリック</span>
+        </div>
+        <div class="map-tools-row">
+          <div class="map-search">
+            <input id="place-search" type="search" placeholder="住所・地名で検索（例: 富士山）" aria-label="場所を検索" />
+            <button id="place-search-button" type="button">検索</button>
+          </div>
+          <div class="actions">
+            <button id="pick-toggle" type="button" aria-pressed="false">2点選択を開始</button>
+            <button id="pick-clear" type="button" disabled>選択をクリア</button>
+          </div>
+        </div>
+      </section>
+
       <section class="summary-band" aria-label="ルート概要">
         <div>
           <span>距離</span>
@@ -162,6 +179,6 @@
     <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
-    <script type="module" src="./app.js?v=20260623-axis-break-gap"></script>
+    <script type="module" src="./app.js?v=20260623-map-section"></script>
   </body>
 </html>
