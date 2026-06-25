@@ -181,8 +181,18 @@ button:disabled {
   padding: 14px;
 }
 
+.map-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.map-column .map-panel {
+  flex: 1;
+}
+
 .map-tools {
-  margin-top: 14px;
   padding: 14px;
   background: var(--surface);
   border: 1px solid var(--line);

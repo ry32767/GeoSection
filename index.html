@@ -56,23 +56,6 @@
         <div id="route-buttons" class="route-buttons"></div>
       </section>
 
-      <section class="map-tools" aria-label="地図から断面図">
-        <div class="panel-title">
-          <h2>地図から断面図</h2>
-          <span id="map-pick-note">住所検索 / 地図で2点クリック</span>
-        </div>
-        <div class="map-tools-row">
-          <div class="map-search">
-            <input id="place-search" type="search" placeholder="住所・地名で検索（例: 富士山）" aria-label="場所を検索" />
-            <button id="place-search-button" type="button">検索</button>
-          </div>
-          <div class="actions">
-            <button id="pick-toggle" type="button" aria-pressed="false">2点選択を開始</button>
-            <button id="pick-clear" type="button" disabled>選択をクリア</button>
-          </div>
-        </div>
-      </section>
-
       <section class="summary-band" aria-label="ルート概要">
         <div>
           <span>距離</span>
@@ -152,8 +135,26 @@
       </section>
 
       <section class="workspace-grid">
-        <div class="map-panel" aria-label="地図">
-          <div id="map"></div>
+        <div class="map-column">
+          <section class="map-tools" aria-label="地図から断面図">
+            <div class="panel-title">
+              <h2>地図から断面図</h2>
+              <span id="map-pick-note">住所検索 / 地図で2点クリック</span>
+            </div>
+            <div class="map-tools-row">
+              <div class="map-search">
+                <input id="place-search" type="search" placeholder="住所・地名で検索（例: 富士山）" aria-label="場所を検索" />
+                <button id="place-search-button" type="button">検索</button>
+              </div>
+              <div class="actions">
+                <button id="pick-toggle" type="button" aria-pressed="false">2点選択を開始</button>
+                <button id="pick-clear" type="button" disabled>選択をクリア</button>
+              </div>
+            </div>
+          </section>
+          <div class="map-panel" aria-label="地図">
+            <div id="map"></div>
+          </div>
         </div>
 
         <div class="chart-stack">
